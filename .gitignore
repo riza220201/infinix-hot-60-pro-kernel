@@ -1,0 +1,23 @@
+# build work dir + outputs (large, reproducible)
+.build/
+out/
+
+# stock firmware images pulled off the device — OEM firmware, not ours to
+# redistribute, and the tooling regenerates everything under .build/ from them
+*.img
+
+# reference material dropped in the tree
+*.zip
+*.log
+Screenshot*
+
+# AnyKernel3 vendored copy keeps its files but not its git metadata
+anykernel/.git/
+
+# personal notes / release drafts (kept local)
+JOURNAL.md
+TELEGRAM-POST*.md
+
+# python caches
+__pycache__/
+*.pyc

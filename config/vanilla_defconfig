@@ -1,0 +1,58 @@
+# config/vanilla_defconfig — KMI-safe tweaks on top of stock gki_defconfig.
+#
+# Applied by kleaf as a POST-defconfig fragment (--defconfig_fragment), i.e.
+# after `make gki_defconfig`, followed by `olddefconfig`. Kleaf then ENFORCES
+# that every line here survived — which is the guard the itel RS4 project did
+# not have when `CONFIG_ZRAM=y` sat in a fragment for a whole release while
+# being silently dropped (its ZSMALLOC dependency was unmet, so olddefconfig
+# discarded it and nobody noticed until ZRAM was accidentally switched ON).
+#
+# ⚠ EVERY LINE HERE IS UNPROVEN UNTIL A BUILD GATES IT. Build --stock FIRST so
+# the gate measures the SOURCE BRANCH alone; only then add this fragment and
+# re-gate, so a failure has one possible cause instead of two.
+
+# ── Default queue discipline: fq ───────────────────────────────────────────
+# gki_defconfig already builds sch_fq but leaves the default at pfifo_fast, and
+# it already sets CONFIG_TCP_CONG_BBR=y. BBR is designed to pair with fq, which
+# does the pacing and per-flow isolation BBR relies on.
+# 🪤 The choice is gated behind `menuconfig NET_SCH_DEFAULT` (net/sched/Kconfig
+# :406) — setting DEFAULT_FQ alone is invisible to Kconfig and silently drops.
+CONFIG_NET_SCH_DEFAULT=y
+CONFIG_DEFAULT_FQ=y
+
+# ── TTL / hop-limit targets ────────────────────────────────────────────────
+# Lets a ROM normalise TTL for tethering. Leaf netfilter targets: no core struct
+# is touched, so they cannot move a CRC.
+CONFIG_NETFILTER_XT_TARGET_HL=y
+CONFIG_IP_NF_TARGET_TTL=y
+CONFIG_IP6_NF_TARGET_HL=y
+
+# ── NOT set here, on purpose ───────────────────────────────────────────────
+# CONFIG_ZRAM stays =m. gki_defconfig already ships it as a MODULE, which is the
+#   right answer anyway: on the itel RS4 a built-in ZRAM bricked recovery,
+#   because that device had no dedicated recovery partition and recovery shared
+#   boot's kernel. Whether THIS device shares that layout is still unmeasured
+#   (tools/device-probe.sh answers it) — so the conclusion is not carried over,
+#   and neither is the fix. =m needs no decision.
+#
+# ✏️ CORRECTED 2026-09-29. This block previously said DEFAULT_BBR was omitted
+#   because it needs opening `menuconfig TCP_CONG_ADVANCED`, "which perturbs the
+#   whole CC choice". That was reasoning about the DEVICE's config, not ours:
+#   gki_defconfig already sets CONFIG_TCP_CONG_ADVANCED=y, so there is nothing to
+#   open and DEFAULT_BBR is a one-line change. Left commented out only so the
+#   first feature build changes one thing at a time — uncomment and re-gate as
+#   its own step. (BBR is present either way, and selectable at runtime via
+#   net.ipv4.tcp_congestion_control.)
+# CONFIG_DEFAULT_BBR=y
+#
+# CONFIG_LOCALVERSION — branding is available but left alone for now. The stock
+#   release string ends in "-4k" (the page-size variant marker) and kleaf appends
+#   LOCALVERSION last, so a brand would read "...-4k-Riza". Harmless to the KMI
+#   (MODVERSIONS skips the version token) but it changes kernel.release, which is
+#   worth doing as its own verified step rather than smuggled into the first
+#   feature build.
+# Branding + a real SCM version, folded into the same build.
+# Stock reads 6.12.38-android16-5-gb575a0b6e647-ab14355190-4k; ours previously
+# read "...-maybe-dirty-4k" because kleaf declines to stamp without --config=stamp.
+CONFIG_LOCALVERSION="-RivalAbadi-4k"
+# CONFIG_LOCALVERSION_AUTO is not set
