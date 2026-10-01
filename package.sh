@@ -59,6 +59,22 @@ RAWIMG="$(find "$BIN" -name "Image" -print -quit 2>/dev/null || true)"
 KREL="$(cat "$(find "$BIN" -name kernel.release -print -quit)" 2>/dev/null || echo unknown)"
 say "kernel.release = $KREL"
 
+# 🔴 bazel-bin is SHARED between variants — it holds whatever was built LAST, while
+#    the gate logs come from out/<variant>/. Package vanilla right after a ksunext
+#    build and you ship the ROOT kernel under the vanilla name, with a vanilla gate
+#    log vouching for it. Nothing downstream would catch it. The release string is
+#    stamped with CONFIG_LOCALVERSION, so it is the one thing that can tell us which
+#    kernel this actually is — check it before writing anything.
+case "$VARIANT" in
+  ksunext) [[ "$KREL" == *-ksunext-* ]] || die "variant/image mismatch: packaging '$VARIANT'
+   but bazel-bin holds '$KREL' (no -ksunext- marker). bazel-bin is shared and holds
+   the LAST build. Re-run: ./build.sh $VARIANT" ;;
+  vanilla) [[ "$KREL" != *-ksunext-* ]] || die "variant/image mismatch: packaging '$VARIANT'
+   but bazel-bin holds '$KREL' — that is the ksunext kernel. bazel-bin is shared and
+   holds the LAST build. Re-run: ./build.sh $VARIANT" ;;
+esac
+say "variant check ok — the image in bazel-bin is the $VARIANT build"
+
 mkdir -p "$OUT"
 
 # ── 1. AnyKernel3 zip (the ROM-agnostic deliverable) ────────────────────────

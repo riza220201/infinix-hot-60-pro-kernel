@@ -3,7 +3,7 @@
 #
 #   ./build.sh vanilla            stock ACK + this project's KMI-safe fragments
 #   ./build.sh vanilla --stock    pure ACK, zero fragments (the control build)
-#   ./build.sh ksunext            vanilla + KernelSU-Next + SusFS   (not wired yet)
+#   ./build.sh ksunext            vanilla + KernelSU-Next + SusFS
 #
 # Flags:
 #   --stock        no defconfig fragments at all. Use this for the first build on
@@ -37,10 +37,6 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 [[ -n "$VARIANT" ]] || die "usage: ./build.sh <vanilla|ksunext> [--stock] [--gate-only] [--jobs N]"
-[[ "$VARIANT" == "ksunext" && "$STOCK" == 0 ]] && \
-  die "the ksunext variant is not wired yet — no KernelSU/SusFS pairing has been
-       verified against android16-6.12. See sources.lock; nothing is pinned, and
-       guessing a 5.10-era recipe here would produce an unvalidated hiding layer."
 
 # ── device.conf ─────────────────────────────────────────────────────────────
 [[ -f "$PROJ/device.conf" ]] || die "no device.conf"
@@ -142,6 +138,16 @@ if [[ "$GATE_ONLY" == 0 ]]; then
   prepare_source
   trap cleanup EXIT
 
+  # ── ksunext: KernelSU-Next + SusFS into the now-pristine tree ─────────────
+  # Runs AFTER prepare_source (which guarantees pristine) and BEFORE configure, so
+  # the Kconfig the fragment selects actually exists. The EXIT trap git-reverts the
+  # tree afterwards, so a ksunext build never leaks into the next vanilla one.
+  if [[ "$VARIANT" == "ksunext" && "$STOCK" == 0 ]]; then
+    say "integrating KernelSU-Next + SusFS"
+    KERNEL_SRC="$KERNEL_WS/common" PROJ="$PROJ" LOCKFILE="$PROJ/sources.lock" \
+      "$PROJ/apply-ksunext-susfs.sh" || die "ksunext integration failed — see above"
+  fi
+
   # ── Configure ─────────────────────────────────────────────────────────────
   BAZEL_ARGS=()
   if [[ "$STOCK" == 1 ]]; then
@@ -185,6 +191,16 @@ if [[ "$GATE_ONLY" == 0 ]]; then
   # so "6.12.38-android16-5-maybe-dirty-4k" never meant the tree was dirty; it
   # meant stamping was off and kleaf had not looked. Stock reads
   # "…-gb575a0b6e647-ab14355190-4k", so a real -g<sha> is the honest match.
+  # ── v1 ships with the stock kleaf stamp ────────────────────────────────────
+  # This gives "6.12.38-android16-5-g<sha>-dirty-RivalAbadi-<variant>-4k". The
+  # "-dirty" is accurate on ksunext (that tree really does carry the KSU driver and
+  # the SusFS patch) but it is not a pretty release string.
+  #
+  # tools/workspace-status-clean.sh removes the "-g<sha>-dirty" field and is written,
+  # path-corrected and verified to emit the right workspace status — but it is NOT
+  # wired here, DELIBERATELY: the v1 zips that shipped were built with the stamp
+  # below, and the committed recipe must reproduce the artifact that shipped. Wire it
+  # for v2, rebuild both variants, and repackage together. See JOURNAL.md.
   BAZEL_ARGS+=("--config=stamp")
   say "build: //common:kernel_aarch64"
   ( cd "$KERNEL_WS" && ./tools/bazel build "${BAZEL_ARGS[@]}" //common:kernel_aarch64 ) \
