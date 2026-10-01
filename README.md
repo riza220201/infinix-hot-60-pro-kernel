@@ -4,9 +4,8 @@ A GKI build-and-gate pipeline for the Infinix HOT 60 Pro+ (MT6789, android16-6.1
 
 > **Status:** v1 (2026-09-30) shipped; its ksunext kernel **boots** on a volunteer
 > tester's phone. v2 (2026-10-01) — clean release string `6.12.38-RivalAbadi-<variant>`
-> and the `MODIFICATIONS.md` ports (BORE, ntsync, Reflex, ADIOS, Kcompressd, le9uo,
-> mt6789_balance, BBR) — is built, gated clean and packaged, but **not yet booted**.
-> See `RESUME.md`.
+> and seven source ports (BORE, ntsync, Reflex, ADIOS, Kcompressd, le9uo,
+> mt6789_balance) plus BBR — is built, gated clean and packaged, but **not yet booted**.
 
 ## The point of this repo
 
@@ -92,8 +91,7 @@ lib/kmi_check.py      gate layer 1 — symbol CRCs vs the shipped modules
 lib/import_check.py   gate layer 3 — import accounting + permitted-import list
 tools/fetch-prebuilt.sh   one toolchain version per subdirectory (5.3 GB, not 29 GB)
 tools/harvest-kmi-ref.py  build the reference set from the device's own firmware
-MODIFICATIONS.md      every possible modification, with what each costs
-RESUME.md             current state and the next command to run
+release-v2.sh         creates the v2 GitHub release as a DRAFT (tag + checksums checked)
 ```
 
 ## Credits
