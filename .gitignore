@@ -19,6 +19,12 @@ anykernel/.git/
 *.md
 !README.md
 
+# device logs from testers (personal data — never in the public repo)
+*dmesg*.txt
+*logcat*.txt
+*kmsg*.txt
+*ramoops*
+
 # python caches
 __pycache__/
 *.pyc

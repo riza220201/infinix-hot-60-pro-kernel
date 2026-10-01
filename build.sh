@@ -269,6 +269,20 @@ if [[ "$GATE_ONLY" == 0 ]]; then
   say "build: //common:kernel_aarch64"
   ( cd "$KERNEL_WS" && ./tools/bazel build "${BAZEL_ARGS[@]}" //common:kernel_aarch64 ) \
     2>&1 | tee "$OUT/build.log"
+
+  # ksunext: read the KernelSU-Next version the KERNEL compiled in, from its own
+  # Kbuild's output — not the number apply-ksunext-susfs.sh computed from the source
+  # clone. v1 and v2 logged "33312" there while the kernel took the fallback
+  # (KSU_VERSION 1, tag v0.0.1); nothing read the build until a tester's manager did.
+  if [[ "$VARIANT" == "ksunext" && "$STOCK" == 0 ]]; then
+    if grep -q "KernelSU-Next version fallback" "$OUT/build.log" \
+       || ! grep -qE -- "-- KernelSU-Next version: ${WILDKSU_VER_EXPECT:-?}\b" "$OUT/build.log"; then
+      die "the kernel's KernelSU-Next version is not ${WILDKSU_VER_EXPECT:-?}:
+$(grep -E 'KernelSU-Next (version|tag)' "$OUT/build.log" | sort -u)
+   (no line at all = bazel reused a cached kernel; rebuild before trusting this one)"
+    fi
+    echo "   ksu in kernel : $(grep -oE 'KernelSU-Next version: [0-9]+' "$OUT/build.log" | sort -u | tail -1), $(grep -oE 'KernelSU-Next tag: [^ ]+' "$OUT/build.log" | sort -u | tail -1)"
+  fi
 fi
 
 # ── Locate the artifacts ────────────────────────────────────────────────────
@@ -313,11 +327,12 @@ if [[ "$STOCK" == 0 ]]; then
   done < "$OUT/composed_defconfig"
   while read -r p cfg sym; do
     [[ "$cfg" == "-" ]] || grep -qx "$cfg=y" "$DOTCFG" || MISS+="  $p: $cfg is not =y"$'\n'
-    awk -v s="$sym" '$3==s{f=1} END{exit !f}' "$SMAP" || MISS+="  $p: symbol $sym not in System.map"$'\n'
+    [[ "$sym" == "-" ]] || awk -v s="$sym" '$3==s{f=1} END{exit !f}' "$SMAP" \
+      || MISS+="  $p: symbol $sym not in System.map"$'\n'
   done < <(awk '!/^[[:space:]]*(#|$)/' "$PROJ/patches/series")
   [[ -z "$MISS" ]] || die "the built kernel is missing configured features:
 $MISS"
-  echo "   features      : fragment fully applied; $(awk '!/^[[:space:]]*(#|$)/' "$PROJ/patches/series" | wc -l) patches present in System.map"
+  echo "   features      : fragment fully applied; $(awk '!/^[[:space:]]*(#|$)/ && $3!="-"' "$PROJ/patches/series" | wc -l) patch probes in System.map ($(awk '!/^[[:space:]]*(#|$)/ && $3=="-"' "$PROJ/patches/series" | wc -l) verified by gate layer 2)"
 fi
 
 # ── Gate ────────────────────────────────────────────────────────────────────
@@ -333,6 +348,22 @@ say "KMI gate — layer 1: symbol CRCs vs $NKO stock modules"
 "$SYSPY" "$PROJ/lib/kmi_check.py" "$SYMVERS" "$KMI_REF_TREE" | tee "$OUT/kmi-check.log"
 L1=${PIPESTATUS[0]}
 
+# Layer 2 — will any stock module be refused for EXPORTING a protected symbol.
+# Layers 1 and 3 only judge imports; v1 and v2 shipped with no Wi-Fi because the
+# phone's Google-signed rfkill.ko / libarc4.ko are unsigned to our kernel and were
+# refused under MODULE_SIG_PROTECT. See lib/protect_check.py.
+say "KMI gate — layer 2: protected exports (MODULE_SIG_PROTECT)"
+DOTCFG2="$BIN/kernel_aarch64_dot_config"
+if grep -q '^CONFIG_MODULE_SIG_PROTECT=y' "$DOTCFG2" 2>/dev/null; then
+  PLIST="$(find "$KERNEL_WS/bazel-bin/common/kernel_aarch64_config" -name protected_module_names_list -print -quit 2>/dev/null || true)"
+  "$SYSPY" "$PROJ/lib/protect_check.py" "$BIN/vmlinux" "$BIN/kernel_aarch64_Module.symvers" "${PLIST:-<none>}" "$KMI_REF_TREE" \
+    | tee "$OUT/protect-check.log"
+  L2=${PIPESTATUS[0]}
+else
+  echo "RESULT: CLEAN — MODULE_SIG_PROTECT is off; no export is protected" | tee "$OUT/protect-check.log"
+  L2=0
+fi
+
 say "KMI gate — layer 3: import accounting"
 if [[ -n "$SYMBOLLIST" ]]; then
   "$SYSPY" "$PROJ/lib/import_check.py" "$SYMVERS" "$KMI_REF_TREE" "$SYMBOLLIST" | tee "$OUT/import-check.log"
@@ -344,9 +375,9 @@ L3=${PIPESTATUS[0]}
 
 set -e
 echo
-if [[ "$L1" == 0 && "$L3" == 0 ]]; then
-  echo "GATE: PASS — layer 1 clean, layer 3 clean."
+if [[ "$L1" == 0 && "$L2" == 0 && "$L3" == 0 ]]; then
+  echo "GATE: PASS — layers 1, 2 and 3 clean."
 else
-  echo "GATE: FAIL — layer1=$L1 layer3=$L3  (1=broken 2=vacuous 3=wrong reference set)"
+  echo "GATE: FAIL — layer1=$L1 layer2=$L2 layer3=$L3  (1=broken 2=vacuous 3=wrong reference set)"
   exit 1
 fi

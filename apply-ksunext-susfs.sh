@@ -119,6 +119,27 @@ $BROKEN"
   || die "drivers/kernelsu/include/uapi/app_profile.h missing — the uapi headers did
    not come across; the build would fail inside bazel with a bare 'file not found'."
 
+# 🔴 The driver's Kbuild derives KSU_VERSION (30000 + rev-count) and KSU_VERSION_TAG
+#    (git describe) from ITS OWN git repo, and silently falls back to 1 / "v0.0.1"
+#    when it finds none. The copy above has no .git, so every v1/v2 ksunext kernel
+#    reported version 1 — the manager showed "v0.0.1 (1-4)" on the tester's phone —
+#    while this script logged "reported version = 33312" about the SOURCE clone.
+#    Pin the values that probe would have computed, before it runs; build.sh then
+#    asserts the build log says so. A version check must read what was BUILT.
+KBD="$KERNEL_SRC/drivers/kernelsu/Kbuild"
+grep -q '^# Check if this is a git repository' "$KBD" \
+  || die "drivers/kernelsu/Kbuild: the git-version probe moved — re-check how it derives KSU_VERSION"
+PIN="# [ksunext] pinned by apply-ksunext-susfs.sh — the driver is copied in without .git
+KSU_GIT_VERSION := $((KVERNUM - 30000))
+KSU_GIT_TAG := $KSUN_TAG
+KSU_GIT_VERSION_VALID := 1
+"
+PIN="$PIN" awk '/^# Check if this is a git repository/ { printf "%s", ENVIRON["PIN"] } { print }' \
+  "$KBD" > "$KBD.pinned" && mv "$KBD.pinned" "$KBD"
+grep -qx "KSU_GIT_VERSION := $((KVERNUM - 30000))" "$KBD" && grep -qx "KSU_GIT_TAG := $KSUN_TAG" "$KBD" \
+  || die "failed to pin KSU_GIT_VERSION/TAG in $KBD"
+say "pinned driver version: KSU_VERSION=$KVERNUM, tag $KSUN_TAG (no .git in the copied tree)"
+
 DMK="$KERNEL_SRC/drivers/Makefile"; DKC="$KERNEL_SRC/drivers/Kconfig"
 grep -q 'kernelsu' "$DMK" || printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> "$DMK"
 grep -q 'drivers/kernelsu/Kconfig' "$DKC" \

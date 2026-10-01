@@ -1,0 +1,34 @@
+GKI: unprotect rfkill and libarc4 — the Wi-Fi fix, for android16-6.12-2025-09 @ 1ad7be92b
+Why      : the phone's vendor_dlkm ships rfkill.ko and libarc4.ko signed with the key of
+           Google's build for this phone. Any kernel we build cannot verify it, so with
+           CONFIG_MODULE_SIG_PROTECT both are refused at load for exporting protected
+           symbols (-EACCES) — cfg80211, mac80211 and wlan_drv_gen4m_6789 depend on
+           rfkill, so Wi-Fi never came up in v1 or v2 (tester, 2026-10-01: Wi-Fi will not
+           turn on; dmesg "[MTK-WIFI] WIFI_write[E]: Wi-Fi driver is not ready").
+Fix      : add both to _COMMON_UNPROTECTED_MODULES_LIST, ACK's own list for GKI modules
+           vendors ship themselves (zram, zsmalloc). Nothing else changes: protection
+           stays on for every other GKI module, unsigned vendor modules still do not
+           taint, and the list only feeds a runtime string table — no CRC moves.
+Measured : of the 424 shipped modules exactly these two export protected symbols
+           (17: rfkill_* and arc4_*). Gate layer 2 (lib/protect_check.py) checks it on
+           every build.
+
+diff --git a/modules.bzl b/modules.bzl
+index b7a858b79..371be90f7 100644
+--- a/modules.bzl
++++ b/modules.bzl
+@@ -206,6 +206,14 @@ def get_kunit_modules_list(arch = None):
+ _COMMON_UNPROTECTED_MODULES_LIST = [
+     "drivers/block/zram/zram.ko",
+     "mm/zsmalloc.ko",
++    # Rival Abadi (Infinix HOT 60 Pro+): Transsion ships these two GKI modules in
++    # vendor_dlkm, signed with the key of Google's build for this phone. A kernel
++    # built by anyone else cannot verify that signature, so under
++    # MODULE_SIG_PROTECT they are refused for exporting protected symbols
++    # (-EACCES) — and cfg80211, mac80211 and the Wi-Fi driver, which depend on
++    # rfkill, never load. Unprotected exactly as zram/zsmalloc are above.
++    "lib/crypto/libarc4.ko",
++    "net/rfkill/rfkill.ko",
+ ]
+ 
+ # buildifier: disable=unnamed-macro
