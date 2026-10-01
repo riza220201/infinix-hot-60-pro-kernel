@@ -14,7 +14,7 @@
 # build.sh checks the last two after every build: a passing KMI gate proves the
 # ABI, not the feature set — a kernel with these silently dropped gates clean too.
 # 05 has no switch or symbol of its own: gate layer 2 (lib/protect_check.py) verifies it.
-05-gki-unprotect-rfkill-libarc4.patch  -                    -
+05-gki-protect-no-module-exports.patch -                    -
 10-bore-6.8.0-gki-kabi.patch    CONFIG_SCHED_BORE            sched_init_bore
 20-ntsync-mainline.patch        CONFIG_NTSYNC                ntsync_misc
 30-reflex-0.3.3r2.patch         CONFIG_CPU_FREQ_GOV_REFLEX   reflex_gov

@@ -102,13 +102,23 @@ print(f"  accounting    : {len(from_vmlinux)} + {len(from_sibling)} + {len(unres
       f"(must equal {len(imports)})")
 
 expected = set(os.environ.get('KMI_UNRESOLVED_EXPECTED', '').replace(',', ' ').split())
+# KMI_KNOWN_BAD_MODULES: a symbol needed ONLY by declared modules does not fail the
+# gate (reported as "known-bad"); one also needed by any other module still does.
+known_bad = set(os.environ.get('KMI_KNOWN_BAD_MODULES', '').replace(',', ' ').split())
+
+
+def only_known_bad(n):
+    return bool(known_bad) and all(os.path.basename(m) in known_bad for m in imports[n])
+
+
 rc = 0
 
 if unresolved:
-    surprises = [n for n in unresolved if n not in expected]
+    surprises = [n for n in unresolved if n not in expected and not only_known_bad(n)]
     for n in unresolved[:20]:
         who = sorted(imports[n])
-        tag = "declared" if n in expected else "SURPRISE"
+        tag = ("declared" if n in expected else
+               "known-bad" if only_known_bad(n) else "SURPRISE")
         print(f"    {tag}: {n}  <- {', '.join(who[:3])}{' …' if len(who) > 3 else ''}")
     if len(unresolved) > 20:
         print(f"    … and {len(unresolved) - 20} more")
@@ -128,9 +138,12 @@ if symbollist_path:
             ln = ln.strip()
             if ln and not ln.startswith('#') and not ln.startswith('['):
                 permitted.add(ln)
-    denied = sorted(n for n in from_vmlinux if n not in permitted)
+    all_denied = sorted(n for n in from_vmlinux if n not in permitted)
+    denied = [n for n in all_denied if not only_known_bad(n)]
     print(f"permitted list  : {symbollist_path}  [{len(permitted)} symbols]")
-    print(f"  vmlinux imports NOT permitted: {len(denied)}")
+    print(f"  vmlinux imports NOT permitted: {len(denied)}"
+          + (f"  (+{len(all_denied) - len(denied)} needed only by declared known-bad "
+             f"modules: {', '.join(sorted(known_bad))})" if len(all_denied) > len(denied) else ""))
     for n in denied[:15]:
         print(f"    -EACCES: {n}  <- {sorted(imports[n])[0]}")
     if denied:

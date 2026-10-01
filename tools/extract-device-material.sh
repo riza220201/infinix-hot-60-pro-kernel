@@ -8,6 +8,7 @@
 #                    -> .build/stock/kernel            (decompressed Image)
 #   vendor_dlkm.img  -> .build/kmi-ref/vendor_dlkm/*.ko
 #   vendor_boot.img  -> .build/kmi-ref/vendor_boot/*.ko  + dtb + bootconfig
+#   system_dlkm*.img -> .build/kmi-ref-system/system_dlkm/*.ko   (optional)
 #
 # Then harvest the KMI reference off those modules. Re-run after replacing ANY
 # image — and re-point every gate that names it, because a stale reference set
@@ -83,6 +84,26 @@ for f in modules.load modules.dep modules.alias modules.softdep modules.blocklis
   [[ -n "$src" ]] && cp "$src" "$B/kmi-ref/vendor_boot.$f"
 done
 echo "   $(ls "$B/kmi-ref/vendor_boot" | wc -l) modules"
+
+# ── system_dlkm.img (optional): Google's GKI modules, the third module set ──
+# Not every device dump includes it; without it those ~80 modules are not gated.
+source "$PROJ/device.conf"
+if [[ -f "$STOCK_SYSTEM_DLKM_IMG" ]]; then
+  echo "== $(basename "$STOCK_SYSTEM_DLKM_IMG")"
+  rm -rf "$KMI_REF_SYSTEM_TREE"; mkdir -p "$KMI_REF_SYSTEM_TREE/system_dlkm"
+  fsck.erofs --extract="$tmp/sdlkm" "$STOCK_SYSTEM_DLKM_IMG" >/dev/null 2>&1
+  find "$tmp/sdlkm" -name '*.ko' -exec cp -t "$KMI_REF_SYSTEM_TREE/system_dlkm/" {} +
+  for f in modules.load modules.dep modules.alias modules.softdep; do
+    src="$(find "$tmp/sdlkm" -name "$f" -print -quit)"
+    [[ -n "$src" ]] && cp "$src" "$KMI_REF_SYSTEM_TREE/system_dlkm.$f"
+  done
+  # Provenance: it must be the SAME firmware as the other images.
+  grep -hE '^ro\.system_dlkm\.build\.(fingerprint|date)=' "$tmp/sdlkm/etc/build.prop" \
+    | tee "$KMI_REF_SYSTEM_TREE/provenance.txt"
+  echo "   $(ls "$KMI_REF_SYSTEM_TREE/system_dlkm" | wc -l) modules"
+else
+  echo "== no $(basename "$STOCK_SYSTEM_DLKM_IMG") — system_dlkm's GKI modules will NOT be gated"
+fi
 
 # ── the reference every build is gated against ──────────────────────────────
 echo "== harvesting the KMI reference"

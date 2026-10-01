@@ -47,6 +47,13 @@ $(tail -3 "$OUT/protect-check.log")"
 grep -q "^RESULT: CLEAN" "$OUT/import-check.log" || \
   die "layer 3 did not pass for $VARIANT:
 $(tail -3 "$OUT/import-check.log")"
+# system_dlkm logs exist only when that reference set exists (build.sh deletes stale
+# ones before gating) — but when they exist, they must be CLEAN too.
+for f in "$OUT/kmi-check-system.log" "$OUT/protect-check-system.log" "$OUT/import-check-system.log"; do
+  [[ -f "$f" ]] || continue
+  grep -q "^RESULT: CLEAN" "$f" || die "system_dlkm gate did not pass for $VARIANT ($(basename "$f")):
+$(tail -3 "$f")"
+done
 say "gate logs confirm CLEAN for $VARIANT"
 
 # ── Locate the built kernel ─────────────────────────────────────────────────
