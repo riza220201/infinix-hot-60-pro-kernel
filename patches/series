@@ -1,0 +1,22 @@
+# patches/series — applied in order by apply-mods.sh to EVERY non-stock variant,
+# onto the pristine pinned tree (sources.lock KERNEL_COMMON_REF), before ksunext.
+#
+# Each patch was generated with `git diff` against exactly that tree, so it is
+# applied with strict `git apply` — no fuzz. Fuzz is how the Reflex port grew a
+# duplicate EXPORT_SYMBOL inside the wrong function; a patch that no longer
+# applies exactly must be re-ported, not coaxed.
+#
+# ORDER MATTERS: each patch was generated on top of the ones before it. 40 shares
+# drivers/cpufreq Kconfig/Makefile context with 30; 70 shares kernel/sysctl.c,
+# mm/Kconfig and mm/vmscan.c with 60. To bisect, truncate from the END.
+#
+# columns:  <patch>  <config switch it needs, or ->  <symbol that must be in System.map>
+# build.sh checks the last two after every build: a passing KMI gate proves the
+# ABI, not the feature set — a kernel with these silently dropped gates clean too.
+10-bore-6.8.0-gki-kabi.patch    CONFIG_SCHED_BORE            sched_init_bore
+20-ntsync-mainline.patch        CONFIG_NTSYNC                ntsync_misc
+30-reflex-0.3.3r2.patch         CONFIG_CPU_FREQ_GOV_REFLEX   reflex_gov
+40-mt6789-balance.patch         CONFIG_MT6789_BALANCE        mt6789_balance_init
+50-adios-3.3.0.patch            CONFIG_MQ_IOSCHED_ADIOS      mq_adios
+60-kcompressd-0.5-gki.patch     CONFIG_KCOMPRESSD            kcompressd_nodes
+70-le9uo-1.14.patch             -                            sysctl_workingset_protection

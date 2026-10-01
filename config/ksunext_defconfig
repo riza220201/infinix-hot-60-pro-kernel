@@ -23,10 +23,5 @@ CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
 CONFIG_KSU_SUSFS_ENABLE_LOG=y
 
 # The vanilla tweaks ride along — a root build should not be a worse kernel.
-CONFIG_NET_SCH_DEFAULT=y
-CONFIG_DEFAULT_FQ=y
-CONFIG_NETFILTER_XT_TARGET_HL=y
-CONFIG_IP_NF_TARGET_TTL=y
-CONFIG_IP6_NF_TARGET_HL=y
-CONFIG_LOCALVERSION="-RivalAbadi-ksunext-4k"
-# CONFIG_LOCALVERSION_AUTO is not set
+# build.sh composes vanilla_defconfig + this file + the generated brand block, so
+# nothing from vanilla is copied here by hand — a hand copy is one edit away from drift.
