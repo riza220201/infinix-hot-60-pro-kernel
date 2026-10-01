@@ -35,12 +35,15 @@ DATE="$(date +%Y%m%d)"
 DEVSLUG="$(echo "$DEVICE_LABEL" | tr -cd '[:alnum:]')"
 
 # ── The gate must have passed ───────────────────────────────────────────────
-for f in "$OUT/kmi-check.log" "$OUT/import-check.log"; do
+for f in "$OUT/kmi-check.log" "$OUT/protect-check.log" "$OUT/import-check.log"; do
   [[ -f "$f" ]] || die "no $f — run ./build.sh $VARIANT first (packaging requires a gated build)"
 done
 grep -q "^RESULT: CLEAN" "$OUT/kmi-check.log" || \
   die "layer 1 did not pass for $VARIANT:
 $(tail -3 "$OUT/kmi-check.log")"
+grep -q "^RESULT: CLEAN" "$OUT/protect-check.log" || \
+  die "layer 2 did not pass for $VARIANT:
+$(tail -3 "$OUT/protect-check.log")"
 grep -q "^RESULT: CLEAN" "$OUT/import-check.log" || \
   die "layer 3 did not pass for $VARIANT:
 $(tail -3 "$OUT/import-check.log")"
