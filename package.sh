@@ -3,8 +3,9 @@
 #
 #   ./package.sh <vanilla|ksunext>
 #
-#   out/<variant>/InfinixHot60ProPlus-<variant>-<date>.zip   AnyKernel3, ROM-agnostic
-#   out/<variant>/InfinixHot60ProPlus-boot-<variant>-<date>.img  stock boot.img, rekernelled
+#   out/<variant>/<DevSlug>-<variant>-<date>.zip       AnyKernel3, ROM-agnostic
+#   out/<variant>/<DevSlug>-boot-<variant>-<date>.img  stock boot.img, rekernelled
+#   (<DevSlug> is DEVICE_LABEL with non-alphanumerics dropped: InfinixHOT60Pro)
 #
 # ⚠ REFUSES TO RUN IF THE GATE HAS NOT PASSED for this variant. Packaging an
 # ungated kernel is how an unbootable image reaches a user, and the sibling
@@ -63,17 +64,18 @@ say "kernel.release = $KREL"
 #    the gate logs come from out/<variant>/. Package vanilla right after a ksunext
 #    build and you ship the ROOT kernel under the vanilla name, with a vanilla gate
 #    log vouching for it. Nothing downstream would catch it. The release string is
-#    stamped with CONFIG_LOCALVERSION, so it is the one thing that can tell us which
-#    kernel this actually is — check it before writing anything.
-case "$VARIANT" in
-  ksunext) [[ "$KREL" == *-ksunext-* ]] || die "variant/image mismatch: packaging '$VARIANT'
-   but bazel-bin holds '$KREL' (no -ksunext- marker). bazel-bin is shared and holds
-   the LAST build. Re-run: ./build.sh $VARIANT" ;;
-  vanilla) [[ "$KREL" != *-ksunext-* ]] || die "variant/image mismatch: packaging '$VARIANT'
-   but bazel-bin holds '$KREL' — that is the ksunext kernel. bazel-bin is shared and
-   holds the LAST build. Re-run: ./build.sh $VARIANT" ;;
-esac
+#    <VERSION>-$BRAND-<variant> (build.sh asserts it), so it names the variant
+#    EXACTLY — match the whole suffix, not a substring that happens to be present.
+KSRC_VER="$(awk -F' = ' '/^VERSION/{v=$2} /^PATCHLEVEL/{p=$2} /^SUBLEVEL/{s=$2}
+                         END{print v"."p"."s}' "$KERNEL_WS/common/Makefile")"
+EXPECT_REL="${KSRC_VER}-${BRAND}-${VARIANT}"
+[[ "$KREL" == "$EXPECT_REL" ]] || die "variant/image mismatch: packaging '$VARIANT' expects
+   '$EXPECT_REL' but bazel-bin holds '$KREL'. bazel-bin is shared and holds the
+   LAST build. Re-run: ./build.sh $VARIANT"
 say "variant check ok — the image in bazel-bin is the $VARIANT build"
+
+# Same shape as the itel RS4's installer string.
+KSTRING="${DEVICE_LABEL} ${BRAND_FULL} (${VARIANT}) • ${KREL} • ${DATE}"
 
 mkdir -p "$OUT"
 
@@ -101,7 +103,7 @@ cat > "$AK/anykernel.sh" <<AKEOF
 ## $DEVICE_LABEL ($DEVICE_SOC) — $VARIANT
 
 properties() { '
-kernel.string=${DEVICE_LABEL} ${VARIANT} kernel by ${BRAND}
+kernel.string=${KSTRING}
 do.devicecheck=${DEVCHECK}
 do.modules=0
 do.systemless=0

@@ -21,21 +21,14 @@ KERNEL_COMMON_REF="1ad7be92b3ed2e7d9c39f9b6d96bb91f1220c76d"
 KERNEL_COMMON_VERSION="6.12.38"   # android16-6.12-2025-09, KMI_GENERATION=5
 KLEAF_BUILD_REF="fb7c474390f227c63b657ef2d8b395cf860b04ea"            # kernel/build (kleaf)
 
-# ⚠ The device ships android16-**5** (KMI generation 5 = branch
-# android16-6.12-2025-09, SUBLEVEL 38). This branch declares KMI_GENERATION=6.
-# Carried deliberately per the operator's patch-level rule; the 4,927-CRC gate
-# is what settles it. Fallback if it ever comes back dirty:
+# The device ships android16-**5** (KMI generation 5); the pin above is on that
+# generation's own branch, which the 4,927-CRC gate confirmed (0 mismatches).
 KERNEL_COMMON_BRANCH="android16-6.12-2025-09"   # the device's own KMI line
 KERNEL_PREVIOUS_ATTEMPT="android16-6.12-lts @ 57041e4a — gate FAILED, see above"
 
 # ── Toolchain (from common/build.config.constants — do not set by hand) ─────
 CLANG_VERSION="r536225"
 RUSTC_VERSION="1.82.0.p2"
-
-# ── Root variant (ksunext) — NOT YET PINNED ────────────────────────────────
-# Nothing is chosen until the pairing is verified against android16-6.12.
-# Do not copy the itel RS4's 5.10-era pins here; none of them apply.
-KSU_VER_EXPECT=""
 
 # ── ksunext variant: KernelSU-Next v3.4.0 "Wild" (pershoot dev-susfs) + SusFS v2.3.0 ──
 # Method ported from itel-rs4-kernel (which mirrors WildKernels/GKI_KernelSU_SUSFS):
@@ -47,4 +40,19 @@ WILDKSU_VERBASE="c61d876480976e553060789759cc4b54c9e7d816"  # version anchor = w
 WILDKSU_VER_EXPECT="33312"                                   # 30000 + rev-count(VERBASE); apply script DIES on drift
 # 🔑 The manager APK must be >= the reported version, or root silently does not work.
 #    Install the KernelSU-Next v3.4.0 manager for 33312.
+#    Consistent with the v1 tester report (2026-09-30): with a stale v3.3.0-72 manager
+#    (33286 < 33312) the manager DETECTED the driver and SusFS v2.3.0, but root did
+#    not work (operator, 2026-10-01). Detection is not root.
 SUSFS_REF="b213c54126fb243595ce7876e91d84d6e0861fec"        # simonpunk gki-android16-6.12 (SusFS v2.3.0) — applies 0-fail to 1ad7be92b
+
+# ── Source modifications (MODIFICATIONS.md) — VENDORED in patches/ ─────────────
+# The ported patches themselves are the pin: each is generated against
+# KERNEL_COMMON_REF and applied with strict `git apply` (patches/series). These
+# refs record where each port came FROM, so a re-port starts from the same place.
+BORE_UPSTREAM="firelzrd/bore-scheduler@d429c02 patches/stable/0001-linux6.12.37-bore-6.8.0.patch"
+NTSYNC_UPSTREAM="torvalds/linux v6.18 drivers/misc/ntsync.c (== v6.14) + v7.2 timens fix"
+REFLEX_UPSTREAM="firelzrd/reflex@0c6c962 patches/0001-linux7.1-reflex-v0.3.3r2.patch"
+BALANCE_UPSTREAM="itel-rs4-kernel patches/rs4/rs4_balance.c (v7)"
+ADIOS_UPSTREAM="firelzrd/adios@6fa79e3 patches/stable/0001-linux6.12.44-ADIOS-3.3.0.patch"
+KCOMPRESSD_UPSTREAM="firelzrd/kcompressd-unofficial@3a42168 patches/stable/0001-linux6.12.44-kcompressd-unofficial-0.5.patch"
+LE9UO_UPSTREAM="firelzrd/le9uo@9d378d1^ le9uo_patches/stable/base/0001-linux6.12.3-le9uo-1.14.patch"

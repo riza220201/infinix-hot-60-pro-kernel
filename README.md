@@ -2,9 +2,11 @@
 
 A GKI build-and-gate pipeline for the Infinix HOT 60 Pro+ (MT6789, android16-6.12).
 
-> **Status: tooling works, nothing has shipped.** The kernel builds and passes both
-> KMI gate layers. It has **never been flashed**, `package.sh` has **never produced
-> a zip**, and the `ksunext` variant is deliberately unwired. See `RESUME.md`.
+> **Status:** v1 (2026-09-30) shipped; its ksunext kernel **boots** on a volunteer
+> tester's phone. v2 (2026-10-01) — clean release string `6.12.38-RivalAbadi-<variant>`
+> and the `MODIFICATIONS.md` ports (BORE, ntsync, Reflex, ADIOS, Kcompressd, le9uo,
+> mt6789_balance, BBR) — is built, gated clean and packaged, but **not yet booted**.
+> See `RESUME.md`.
 
 ## The point of this repo
 
@@ -48,9 +50,17 @@ the refutation together.
 ```bash
 ./tools/fetch-toolchain.sh        # 5.3 GB: clang-r536225 + rust 1.82.0
 ./build.sh vanilla --stock        # pure ACK — measures the KMI alone
-./build.sh vanilla                # + config/vanilla_defconfig
+./build.sh vanilla                # + patches/series + config/vanilla_defconfig + brand
+./build.sh ksunext                # vanilla + KernelSU-Next + SusFS
 ./build.sh vanilla --gate-only    # re-gate without rebuilding
+./package.sh vanilla              # AnyKernel3 zip + repacked boot.img — right after
+                                  #   building THAT variant (bazel-bin is shared)
 ```
+
+Beyond the KMI gate, `build.sh` asserts the release string in `kernel.release` and the
+`Image` banner, every line of the config fragment in the built `.config`, and every
+patch's config switch and probe symbol in `System.map` — a gate proves the ABI, not
+the feature set.
 
 `build.sh` refuses to build off a `common` that has drifted off `sources.lock`,
 naming both shas — `repo sync` tracks the manifest *branch* and will silently
@@ -70,7 +80,11 @@ cannot clobber a good build.
 ## Layout
 
 ```
-build.sh              build + gate
+build.sh              build + gate (+ branding, feature check)
+apply-mods.sh         applies patches/series to the pinned tree — strict, no fuzz
+apply-ksunext-susfs.sh  KernelSU-Next (pershoot dev-susfs) + SusFS, ksunext only
+patches/              the ported MODIFICATIONS, one patch each, provenance in the header
+config/               vanilla_defconfig (all variants) + ksunext_defconfig
 package.sh            AnyKernel3 zip + boot.img repack (refuses unless gates are CLEAN)
 sources.lock          pinned kernel ref, toolchain versions, and why
 device.conf           device facts: module_layout, vermagic, kernel format, brand
@@ -84,5 +98,8 @@ RESUME.md             current state and the next command to run
 
 ## Credits
 
-GKI and kleaf are Google's. AnyKernel3 is osm0sis'. The gate, the pins and the
+GKI and kleaf are Google's. BORE, Reflex, ADIOS, Kcompressd-Unofficial and le9uo
+are firelzrd's (Kcompressd after Qun-Wei Lin, MediaTek); ntsync is Elizabeth Figura's
+(CodeWeavers). KernelSU-Next, pershoot's `dev-susfs`, simonpunk's SusFS. AnyKernel3 is
+osm0sis'. The gate, the pins and the
 refutations are this repo's.
