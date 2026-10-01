@@ -35,6 +35,16 @@ RUSTC_VERSION="1.82.0.p2"
 # ── Root variant (ksunext) — NOT YET PINNED ────────────────────────────────
 # Nothing is chosen until the pairing is verified against android16-6.12.
 # Do not copy the itel RS4's 5.10-era pins here; none of them apply.
-KSU_REF=""
 KSU_VER_EXPECT=""
-SUSFS_REF=""
+
+# ── ksunext variant: KernelSU-Next v3.4.0 "Wild" (pershoot dev-susfs) + SusFS v2.3.0 ──
+# Method ported from itel-rs4-kernel (which mirrors WildKernels/GKI_KernelSU_SUSFS):
+# SusFS is IN-DRIVER on pershoot's dev-susfs, so there is NO 10_enable_susfs_for_ksu
+# patch. That patch is for stock KernelSU; measured against this tree it fails 20 hunks
+# on KSU-Next v3.4.0 and 36 on v3.3.0 — the pairing, not the patch, was the problem.
+WILDKSU_REF="d575262c1b40180a0f915544f42d8c4ab34b874b"      # pershoot/KernelSU-Next dev-susfs tip (tag v3.4.0)
+WILDKSU_VERBASE="c61d876480976e553060789759cc4b54c9e7d816"  # version anchor = what Wild's own Kbuild counts
+WILDKSU_VER_EXPECT="33312"                                   # 30000 + rev-count(VERBASE); apply script DIES on drift
+# 🔑 The manager APK must be >= the reported version, or root silently does not work.
+#    Install the KernelSU-Next v3.4.0 manager for 33312.
+SUSFS_REF="b213c54126fb243595ce7876e91d84d6e0861fec"        # simonpunk gki-android16-6.12 (SusFS v2.3.0) — applies 0-fail to 1ad7be92b
