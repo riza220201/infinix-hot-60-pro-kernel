@@ -45,7 +45,7 @@ WILDKSU_VER_EXPECT="33312"                                   # 30000 + rev-count
 #    not work (operator, 2026-10-01). Detection is not root.
 SUSFS_REF="b213c54126fb243595ce7876e91d84d6e0861fec"        # simonpunk gki-android16-6.12 (SusFS v2.3.0) — applies 0-fail to 1ad7be92b
 
-# ── Source modifications (MODIFICATIONS.md) — VENDORED in patches/ ─────────────
+# ── Source modifications — VENDORED in patches/ ───────────────────────────────
 # The ported patches themselves are the pin: each is generated against
 # KERNEL_COMMON_REF and applied with strict `git apply` (patches/series). These
 # refs record where each port came FROM, so a re-port starts from the same place.

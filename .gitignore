@@ -14,9 +14,10 @@ Screenshot*
 # AnyKernel3 vendored copy keeps its files but not its git metadata
 anykernel/.git/
 
-# personal notes / release drafts (kept local)
-JOURNAL.md
-TELEGRAM-POST*.md
+# Markdown is local work notes (journal, resume, inventory, release drafts) —
+# only READMEs are part of the repo.
+*.md
+!README.md
 
 # python caches
 __pycache__/

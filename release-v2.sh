@@ -9,7 +9,8 @@
 # Same shape as itel-rs4-kernel's release-v7.sh. Refuses to run unless the remote tag
 # v2 is the local tag v2, so the release can never attach to a different commit than
 # the one the assets were built from. Refuses if a v2 release already exists.
-# Release body = RELEASE-NOTES.md (the tracked notes ARE the release page).
+# Release body = RELEASE-NOTES.md — a local note (every *.md but README is
+# gitignored); it is the release page.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 REPO="riza220201/infinix-hot-60-pro-kernel"
@@ -51,8 +52,10 @@ if api "https://api.github.com/repos/$REPO/releases?per_page=100" \
   echo "✗ a (draft) release for $TAG already exists — delete it on GitHub first"; exit 1
 fi
 
-# SHA256SUMS over exactly the assets being published
-( cd out && sha256sum "${ASSETS[@]#out/}" ) > out/SHA256SUMS
+# SHA256SUMS over exactly the assets being published — BARE file names, as a user
+# downloads them flat; `sha256sum -c SHA256SUMS` must work next to the downloads.
+# (release-v7.sh wrote "vanilla/<file>" paths, which -c cannot find.)
+for f in "${ASSETS[@]}"; do ( cd "$(dirname "$f")" && sha256sum "$(basename "$f")" ); done > out/SHA256SUMS
 ASSETS+=(out/SHA256SUMS)
 cat out/SHA256SUMS
 
