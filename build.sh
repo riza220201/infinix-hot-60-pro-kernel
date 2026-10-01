@@ -373,11 +373,38 @@ else
 fi
 L3=${PIPESTATUS[0]}
 
+# ── system_dlkm: Google's GKI modules, which the ROM loads too ───────────────
+# Same three layers against the third module set. Signed with the stock build's key,
+# so unsigned to us: v1/v2 refused 27 of them under MODULE_SIG_PROTECT. Declared
+# known-bad modules (device.conf KMI_SYSTEM_KNOWN_BAD) are reported, not counted.
+S1=0; S2=0; S3=0
+rm -f "$OUT/kmi-check-system.log" "$OUT/protect-check-system.log" "$OUT/import-check-system.log"
+if [[ -d "${KMI_REF_SYSTEM_TREE:-}" ]] && [[ -n "$(find "$KMI_REF_SYSTEM_TREE" -name '*.ko' -print -quit)" ]]; then
+  say "system_dlkm — layers 1, 2, 3 vs $(find "$KMI_REF_SYSTEM_TREE" -name '*.ko' | wc -l) GKI modules  (known-bad: ${KMI_SYSTEM_KNOWN_BAD:-none})"
+  KMI_EXPECT_VERMAGIC="$KMI_SYSTEM_EXPECT_VERMAGIC" KMI_VERMAGIC_EXCEPTIONS="" \
+  KMI_KNOWN_BAD_MODULES="${KMI_SYSTEM_KNOWN_BAD:-}" \
+    "$SYSPY" "$PROJ/lib/kmi_check.py" "$SYMVERS" "$KMI_REF_SYSTEM_TREE" | tee "$OUT/kmi-check-system.log"
+  S1=${PIPESTATUS[0]}
+  if grep -q '^CONFIG_MODULE_SIG_PROTECT=y' "$DOTCFG2" 2>/dev/null; then
+    "$SYSPY" "$PROJ/lib/protect_check.py" "$BIN/vmlinux" "$BIN/kernel_aarch64_Module.symvers" "${PLIST:-<none>}" "$KMI_REF_SYSTEM_TREE" \
+      | tee "$OUT/protect-check-system.log"
+    S2=${PIPESTATUS[0]}
+  else
+    echo "RESULT: CLEAN — MODULE_SIG_PROTECT is off; no export is protected" | tee "$OUT/protect-check-system.log"
+  fi
+  KMI_UNRESOLVED_EXPECTED="" KMI_KNOWN_BAD_MODULES="${KMI_SYSTEM_KNOWN_BAD:-}" \
+    "$SYSPY" "$PROJ/lib/import_check.py" "$SYMVERS" "$KMI_REF_SYSTEM_TREE" ${SYMBOLLIST:+"$SYMBOLLIST"} \
+    | tee "$OUT/import-check-system.log"
+  S3=${PIPESTATUS[0]}
+else
+  echo "   (no system_dlkm reference at '${KMI_REF_SYSTEM_TREE:-}' — its GKI modules are NOT gated)"
+fi
+
 set -e
 echo
-if [[ "$L1" == 0 && "$L2" == 0 && "$L3" == 0 ]]; then
-  echo "GATE: PASS — layers 1, 2 and 3 clean."
+if [[ "$L1" == 0 && "$L2" == 0 && "$L3" == 0 && "$S1" == 0 && "$S2" == 0 && "$S3" == 0 ]]; then
+  echo "GATE: PASS — layers 1, 2 and 3 clean, vendor and system_dlkm."
 else
-  echo "GATE: FAIL — layer1=$L1 layer2=$L2 layer3=$L3  (1=broken 2=vacuous 3=wrong reference set)"
+  echo "GATE: FAIL — vendor 1/2/3=$L1/$L2/$L3  system_dlkm 1/2/3=$S1/$S2/$S3  (1=broken 2=vacuous 3=wrong reference set)"
   exit 1
 fi

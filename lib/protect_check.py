@@ -90,13 +90,17 @@ def vmlinux_table(path):
         t_sym = st.get_symbol_by_name('protected_symbol_exports') if st else None
         if not n_sym or not t_sym:
             return None
-        secs = [(x['sh_addr'], x['sh_size'], x.data()) for x in ef.iter_sections()
-                if x['sh_type'] != 'SHT_NOBITS' and x['sh_addr']]
+        # .bss (SHT_NOBITS) has no file bytes: it is zero at boot. An EMPTY table
+        # puts protected_symbol_exports_count = 0 there — reading only PROGBITS
+        # sections crashed on exactly the kernel that protects nothing.
+        secs = [(x['sh_addr'], x['sh_size'],
+                 None if x['sh_type'] == 'SHT_NOBITS' else x.data())
+                for x in ef.iter_sections() if x['sh_addr']]
 
         def read(addr, size):
             for a, sz, d in secs:
                 if a <= addr < a + sz:
-                    return d[addr - a:addr - a + size]
+                    return bytes(size) if d is None else d[addr - a:addr - a + size]
             raise ValueError(f"address {addr:#x} not in any loaded section")
         n = struct.unpack('<Q', read(n_sym[0]['st_value'], 8))[0]
         out = set()

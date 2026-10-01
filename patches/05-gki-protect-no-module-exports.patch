@@ -1,0 +1,48 @@
+GKI: protect no module's exports — Wi-Fi and the system_dlkm modules, for
+android16-6.12-2025-09 @ 1ad7be92b
+Why      : with CONFIG_MODULE_SIG_PROTECT, a module exporting a symbol of a listed
+           ("protected") GKI module is refused (-EACCES) unless its signature verifies
+           against THIS kernel's key. Every GKI module on this phone is signed with the
+           key of the kernel Google built for it — the 81 in system_dlkm, and rfkill,
+           libarc4, zsmalloc copied into vendor_dlkm — and no kernel we build holds it.
+           Measured with gate layer 2: the first v2 refused vendor_dlkm's rfkill and
+           libarc4 (cfg80211, mac80211 and the MediaTek Wi-Fi driver depend on rfkill:
+           no Wi-Fi in v1 and the first v2); with those two unprotected, 27 system_dlkm
+           modules were still refused: bluetooth, btbcm, btqca,
+           hci_uart, usbnet, cdc_ether, mii, r8152, ppp_generic, pppox, slhc, l2tp_core,
+           can, can-dev, nfc, ieee802154, mac802154, 6lowpan, usbserial, netfs, 9pnet,
+           ptp, pps_core, tipc, pwrseq-core, virtio_pci_{legacy,modern}_dev.
+Fix      : get_gki_protected_modules_list() returns no modules. MODULE_SIG_PROTECT stays
+           on with an empty table (protected_symbol_exports_count = 0) — off would make
+           every unsigned vendor module taint the kernel. Supersedes the earlier
+           05-gki-unprotect-rfkill-libarc4.patch (rfkill + libarc4 only). No CRC moves.
+Not fixed: system_dlkm's rust_binder.ko (22 CRC mismatches, 130 non-permitted imports;
+           unused — Android runs the built-in C binder) and 9pnet_fd.ko (3 non-permitted
+           imports; VM-only). Both are declared known exceptions in device.conf.
+
+diff --git a/modules.bzl b/modules.bzl
+index b7a858b79..07b9af746 100644
+--- a/modules.bzl
++++ b/modules.bzl
+@@ -210,7 +210,20 @@ _COMMON_UNPROTECTED_MODULES_LIST = [
+ 
+ # buildifier: disable=unnamed-macro
+ def get_gki_protected_modules_list(arch = None):
++    # Rival Abadi (Infinix HOT 60 Pro+): protect NO module's exports.
++    #
++    # MODULE_SIG_PROTECT refuses a module that exports a protected symbol unless
++    # its signature verifies against THIS kernel's key. Every GKI module on this
++    # phone — the 81 in system_dlkm and the copies Transsion put in vendor_dlkm
++    # (rfkill, libarc4, zsmalloc) — is signed with the key of the kernel Google
++    # built for it, which a kernel built by anyone else never holds. So here the
++    # list can only refuse Google's own modules: rfkill (and with it cfg80211,
++    # mac80211 and the Wi-Fi driver), bluetooth, usbnet/cdc_ether/r8152, ppp,
++    # can, nfc, 802.15.4, usbserial, virtio... — 29 modules in all. Nothing we
++    # ship is signed either, so there is nothing for the list to protect.
++    # Kept ON (empty) rather than off: with MODULE_SIG_PROTECT off, every
++    # unsigned vendor module would taint the kernel.
+     all_gki_modules = get_gki_modules_list(arch) + get_kunit_modules_list(arch)
+-    unprotected_modules = _COMMON_UNPROTECTED_MODULES_LIST
++    unprotected_modules = all_gki_modules
+     protected_modules = [mod for mod in all_gki_modules if mod not in unprotected_modules]
+     return sorted(protected_modules)

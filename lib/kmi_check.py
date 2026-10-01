@@ -92,6 +92,11 @@ tot = match = mism = missing = ml_ok = ml_bad = 0
 examples = []
 per_subset_bad = collections.Counter()
 
+# KMI_KNOWN_BAD_MODULES: basenames whose failures are DECLARED (reported, not
+# counted) — e.g. system_dlkm's rust_binder.ko, whose Rust-crate imports are not
+# KMI-stable. Unset = every module counts, exactly as before.
+known_bad = set(os.environ.get('KMI_KNOWN_BAD_MODULES', '').replace(',', ' ').split())
+known_bad_hits = collections.Counter()
 for ko in kos:
     rel = os.path.relpath(ko, ref_tree)
     subset = rel.split(os.sep)[0] if os.sep in rel else '(root)'
@@ -107,6 +112,8 @@ for ko in kos:
             match += 1
             if nm == 'module_layout':
                 ml_ok += 1
+        elif os.path.basename(ko) in known_bad:
+            known_bad_hits[os.path.basename(ko)] += 1
         else:
             mism += 1
             per_subset_bad[subset] += 1
@@ -129,6 +136,13 @@ print(f"  not-in-vmlinux: {missing}  (inter-vendor, resolved module-to-module at
 print(f"module_layout   : ok={ml_ok} bad={ml_bad}")
 if per_subset_bad:
     print("mismatches by set: " + "  ".join(f"{s}={n}" for s, n in sorted(per_subset_bad.items())))
+for m in sorted(known_bad):
+    if known_bad_hits[m]:
+        print(f"known-bad       : {m} — {known_bad_hits[m]} CRC mismatch(es), DECLARED, not counted")
+    elif m in {os.path.basename(k) for k in kos}:
+        print(f"known-bad       : {m} — declared, no CRC mismatch in this layer (still needed by another?)")
+    else:
+        print(f"known-bad       : {m} — declared but not in this reference tree")
 if examples:
     print("sample mismatches (module, symbol, module-wants, our-vmlinux):")
     for e in examples:
