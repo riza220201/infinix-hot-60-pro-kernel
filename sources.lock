@@ -26,32 +26,34 @@ KLEAF_BUILD_REF="fb7c474390f227c63b657ef2d8b395cf860b04ea"            # kernel/b
 KERNEL_COMMON_BRANCH="android16-6.12-2025-09"   # the device's own KMI line
 KERNEL_PREVIOUS_ATTEMPT="android16-6.12-lts @ 57041e4a — gate FAILED, see above"
 
-# ── Toolchain (from common/build.config.constants — do not set by hand) ─────
-CLANG_VERSION="r536225"
+# ── Toolchain (Neutron clang 24, overriding common/build.config.constants) ──
+CLANG_VERSION="neutron-clang-06092026 (clang 24.0.0git, llvm f42c87ba)"
+CLANG_PREBUILT_REF="r536225"
 RUSTC_VERSION="1.82.0.p2"
 
-# ── ksunext variant: KernelSU-Next v3.4.0 "Wild" (pershoot dev-susfs) + SusFS v2.3.0 ──
+# ── ksunext variant: KernelSU-Next v3.4.2 "Wild" (pershoot dev-susfs) + SusFS v2.3.0 ──
 # Method ported from itel-rs4-kernel (which mirrors WildKernels/GKI_KernelSU_SUSFS):
 # SusFS is IN-DRIVER on pershoot's dev-susfs, so there is NO 10_enable_susfs_for_ksu
 # patch. That patch is for stock KernelSU; measured against this tree it fails 20 hunks
 # on KSU-Next v3.4.0 and 36 on v3.3.0 — the pairing, not the patch, was the problem.
-WILDKSU_REF="d575262c1b40180a0f915544f42d8c4ab34b874b"      # pershoot/KernelSU-Next dev-susfs tip (tag v3.4.0)
-WILDKSU_VERBASE="c61d876480976e553060789759cc4b54c9e7d816"  # version anchor = what Wild's own Kbuild counts
-WILDKSU_VER_EXPECT="33312"                                   # 30000 + rev-count(VERBASE); apply script DIES on drift
-# 🔑 The manager APK must be >= the reported version, or root silently does not work.
-#    Install the KernelSU-Next v3.4.0 manager for 33312.
-#    Consistent with the v1 tester report (2026-09-30): with a stale v3.3.0-72 manager
-#    (33286 < 33312) the manager DETECTED the driver and SusFS v2.3.0, but root did
-#    not work (operator, 2026-10-01). Detection is not root.
-SUSFS_REF="b213c54126fb243595ce7876e91d84d6e0861fec"        # simonpunk gki-android16-6.12 (SusFS v2.3.0) — applies 0-fail to 1ad7be92b
+#
+# d21e0a66 = upstream KernelSU-Next dev b427a3f9 (v3.4.2 + 50 commits) + 13 Wild
+# commits (9 Wild + 4 Samsung KDP/RKP/DEFEX compat, inert on mediatek,MT6789).
+WILDKSU_REF="d21e0a66c887ae4bc75b7c9f83e41761819ec09a"      # pershoot/KernelSU-Next dev-susfs (hot60pro-pin-20261031)
+WILDKSU_VERBASE="b427a3f9c2421a443f961007bfce66b25486643f"  # version anchor = merge-base with upstream dev (v3.4.2 + 50)
+WILDKSU_VER_EXPECT="33405"                                   # 30000 + rev-count(VERBASE); apply script DIES on drift
+# 🔑 UAPI 6: upstream 16be0f72 (module preinit) bumped KERNEL_SU_UAPI_VERSION 5 -> 6;
+#    the released v3.4.2 APK (33355, uapi 5) is older than this anchor and its ksud
+#    refuses uapi 6. Install the KernelSU-Next CI manager build of b427a3f9 (33405, uapi 6).
+SUSFS_REF="2f0be22c2d09b8cca0a28ec0c45d8609b6433a21"        # simonpunk gki-android16-6.12 6b60a30 + 2 pershoot picks, rebased onto 1ad7be92b (hot60pro-susfs-20261031)
 
 # ── Source modifications — VENDORED in patches/ ───────────────────────────────
 # The ported patches themselves are the pin: each is generated against
 # KERNEL_COMMON_REF and applied with strict `git apply` (patches/series). These
 # refs record where each port came FROM, so a re-port starts from the same place.
-BORE_UPSTREAM="firelzrd/bore-scheduler@d429c02 patches/stable/0001-linux6.12.37-bore-6.8.0.patch"
-NTSYNC_UPSTREAM="torvalds/linux v6.18 drivers/misc/ntsync.c (== v6.14) + v7.2 timens fix"
-REFLEX_UPSTREAM="firelzrd/reflex@0c6c962 patches/0001-linux7.1-reflex-v0.3.3r2.patch"
+BORE_UPSTREAM="firelzrd/bore-scheduler@1e2f57a patches/stable/0001-linux6.12.37-bore-7.0.0.patch"
+NTSYNC_UPSTREAM="torvalds/linux v6.14 drivers/misc/ntsync.c + fixes 61611481f7b5, 180a232ea780"
+REFLEX_UPSTREAM="firelzrd/reflex@f0a6678 patches/0001-linux6.12.74-reflex-v0.4.0.patch (latency_weight=300)"
 BALANCE_UPSTREAM="itel-rs4-kernel patches/rs4/rs4_balance.c (v7)"
 ADIOS_UPSTREAM="firelzrd/adios@6fa79e3 patches/stable/0001-linux6.12.44-ADIOS-3.3.0.patch"
 KCOMPRESSD_UPSTREAM="firelzrd/kcompressd-unofficial@3a42168 patches/stable/0001-linux6.12.44-kcompressd-unofficial-0.5.patch"

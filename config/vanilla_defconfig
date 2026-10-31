@@ -53,16 +53,16 @@ CONFIG_NET_SCH_CAKE=y
 # ── Source patches (apply-mods.sh, patches/series) ──────────────────────────
 # Each switch below is backed by a patch in patches/; the gate re-verifies the
 # KMI, and build.sh asserts each one survived into the final .config.
-# BORE 6.8.0 — burst-aware CFS/EEVDF tweak. Its per-task state is packed into
-#   task_struct's ANDROID_KABI_RESERVE slots 3..6 (see patches/). Runtime off
-#   switch, no reflash needed:  echo 0 > /proc/sys/kernel/sched_bore
+# BORE 7.0.0 — burst-aware CFS/EEVDF scheduler. Per-task state packed into
+#   task_struct's ANDROID_KABI_RESERVE slots 3..7 (see patches/). Runtime off
+#   switch: echo 0 > /proc/sys/kernel/sched_bore
 CONFIG_SCHED_BORE=y
 # ntsync — the COMPLETE mainline driver (the in-tree 6.12 file is the 247-line,
 #   semaphore-only stub behind `depends on BROKEN`). Leaf misc device, /dev/ntsync.
 CONFIG_NTSYNC=y
-# Reflex cpufreq governor — built in (its Kconfig default is =m, which kleaf would
-#   refuse as an unlisted module). Present but NOT selected: this ROM does not write
-#   it anywhere; pick it per policy at runtime via scaling_governor.
+# Reflex cpufreq governor 0.4.0 — built in (its Kconfig default is =m, which kleaf
+#   would refuse as an unlisted module). Present but NOT selected: this ROM does not
+#   write it anywhere; pick it per policy at runtime via scaling_governor.
 CONFIG_CPU_FREQ_GOV_REFLEX=y
 # mt6789_balance (MODIFICATIONS §G) — boot boost, touch floor, screen-off cap as
 #   freq_qos requests. Tunables: /sys/module/mt6789_balance/parameters/

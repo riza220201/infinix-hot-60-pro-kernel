@@ -53,6 +53,30 @@ source "$PROJ/device.conf"
 KERNEL_WS="${KERNEL_WS:-$PROJ/.build/kernel}"
 KMI_REF_TREE="${KMI_REF_TREE:-$PROJ/.build/kmi-ref}"
 
+# ── Optional custom clang, e.g. Neutron clang 24 ────────────────────────────
+# Kleaf's default is the CLANG_VERSION in the pinned tree (r536225 here). Set
+# CLANG_DIR to a toolchain with the AOSP layout (bin/clang, bin/ld.lld, ...) to
+# build with it instead. Kleaf's own --user_clang_toolchain plumbing does the
+# symlinking, so nothing in the workspace is replaced.
+if [[ -n "${CLANG_DIR:-}" ]]; then
+  [[ "$CLANG_DIR" == /* ]] || CLANG_DIR="$PROJ/$CLANG_DIR"
+  for _t in bin/clang bin/clang++ bin/llvm-ar bin/llvm-strip bin/llvm-objcopy bin/ld.lld; do
+    [[ -x "$CLANG_DIR/$_t" ]] || die "CLANG_DIR=$CLANG_DIR has no executable $_t"
+  done
+  case "$CLANG_DIR" in
+    *[[:space:]]*|*:*) die "CLANG_DIR contains a space or colon: '$CLANG_DIR' — move it." ;;
+  esac
+fi
+
+# Bazel's output_user_root can outgrow the source filesystem. Point it at
+# another disk with KLEAF_OUTPUT_ROOT (must be absolute).
+if [[ -n "${KLEAF_OUTPUT_ROOT:-}" ]]; then
+  [[ "$KLEAF_OUTPUT_ROOT" == /* ]] || die "KLEAF_OUTPUT_ROOT must be absolute: '$KLEAF_OUTPUT_ROOT'"
+  case "$KLEAF_OUTPUT_ROOT" in
+    *[[:space:]]*|*:*) die "KLEAF_OUTPUT_ROOT contains a space or colon: '$KLEAF_OUTPUT_ROOT'" ;;
+  esac
+fi
+
 # A build path containing a space breaks the kernel Makefile, pkg-config, meson
 # and Kbuild — each with a different message, none of which names the variable.
 for v in PROJ KERNEL_WS KMI_REF_TREE; do
@@ -90,6 +114,11 @@ KSRC_VER="$(awk -F' = ' '/^VERSION/{v=$2} /^PATCHLEVEL/{p=$2} /^SUBLEVEL/{s=$2}
 KSRC_REF="$(git -C "$KERNEL_WS/common" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 KMI_GEN="$(awk -F= '/^KMI_GENERATION/{print $2}' "$KERNEL_WS/common/build.config.constants")"
 echo "   source        : $KSRC_VER @ $KSRC_REF  (KMI_GENERATION=$KMI_GEN)"
+if [[ -n "${CLANG_DIR:-}" ]]; then
+  echo "   clang         : $("$CLANG_DIR/bin/clang" --version | head -1)  ($CLANG_DIR)"
+else
+  echo "   clang         : kleaf default $(awk -F= '/^CLANG_VERSION/{print $2}' "$KERNEL_WS/common/build.config.constants")"
+fi
 
 # The release string this build must produce: <VERSION>-<BRAND>-<variant>, the RS4's
 # shape (5.10.260-Riza-vanilla). Validated here because each piece lands in a C
@@ -237,6 +266,11 @@ if [[ "$GATE_ONLY" == 0 ]]; then
     brand_source
   fi
   [[ -n "$JOBS" ]] && BAZEL_ARGS+=("--jobs=$JOBS")
+  [[ -n "${CLANG_DIR:-}" ]] && BAZEL_ARGS+=("--user_clang_toolchain=$CLANG_DIR")
+# gendwarfksyms --stable must reach make through bazel action env so that
+# vmlinux.symvers CRCs match clang-19-built reference modules (neutron clang 24
+# otherwise yields 0xf52a27c0 for net_ns_type_operations instead of 0xe22fd8a9).
+BAZEL_ARGS+=("--action_env=KBUILD_GENDWARFKSYMS_STABLE=1")
   # --lto is an EXPERIMENT KNOB, not a tuning one. gki_defconfig ships LTO_NONE
   # on android14-6.1+ because kCFI no longer needs whole-program LTO, and the
   # device's own extracted config confirms LTO_NONE. Anything else is a
@@ -266,8 +300,13 @@ if [[ "$GATE_ONLY" == 0 ]]; then
   # The "-g<sha>[-dirty]" it also produces never reaches a branded release —
   # brand_source() drops kleaf's whole localversion file (see there).
   BAZEL_ARGS+=("--config=stamp")
+  BAZEL_STARTUP_ARGS=()
+  if [[ -n "${KLEAF_OUTPUT_ROOT:-}" ]]; then
+    BAZEL_STARTUP_ARGS+=("--output_user_root=$KLEAF_OUTPUT_ROOT")
+    echo "   bazel out     : $KLEAF_OUTPUT_ROOT"
+  fi
   say "build: //common:kernel_aarch64"
-  ( cd "$KERNEL_WS" && ./tools/bazel build "${BAZEL_ARGS[@]}" //common:kernel_aarch64 ) \
+  ( cd "$KERNEL_WS" && ./tools/bazel "${BAZEL_STARTUP_ARGS[@]}" build "${BAZEL_ARGS[@]}" //common:kernel_aarch64 ) \
     2>&1 | tee "$OUT/build.log"
 
   # ksunext: read the KernelSU-Next version the KERNEL compiled in, from its own
@@ -345,7 +384,8 @@ fi
 #    time you need it. Both layers now always run; the verdict is computed after.
 set +e
 say "KMI gate — layer 1: symbol CRCs vs $NKO stock modules"
-"$SYSPY" "$PROJ/lib/kmi_check.py" "$SYMVERS" "$KMI_REF_TREE" | tee "$OUT/kmi-check.log"
+KMI_KNOWN_BAD_MODULES="${KMI_VENDOR_KNOWN_BAD:-}" \
+  "$SYSPY" "$PROJ/lib/kmi_check.py" "$SYMVERS" "$KMI_REF_TREE" | tee "$OUT/kmi-check.log"
 L1=${PIPESTATUS[0]}
 
 # Layer 2 — will any stock module be refused for EXPORTING a protected symbol.
@@ -403,6 +443,14 @@ fi
 set -e
 echo
 if [[ "$L1" == 0 && "$L2" == 0 && "$L3" == 0 && "$S1" == 0 && "$S2" == 0 && "$S3" == 0 ]]; then
+  if [[ "$STOCK" == 0 ]]; then
+    STAGED="$PROJ/.build/staged-$VARIANT"
+    rm -rf "$STAGED"; mkdir -p "$STAGED"
+    for f in Image Image.lz4 Image.gz; do
+      [[ -f "$BIN/$f" ]] && cp -f "$BIN/$f" "$STAGED/$f"
+    done
+    [[ -n "$KREL" && -f "$KREL" ]] && cp -f "$KREL" "$STAGED/kernel.release"
+  fi
   echo "GATE: PASS — layers 1, 2 and 3 clean, vendor and system_dlkm."
 else
   echo "GATE: FAIL — vendor 1/2/3=$L1/$L2/$L3  system_dlkm 1/2/3=$S1/$S2/$S3  (1=broken 2=vacuous 3=wrong reference set)"

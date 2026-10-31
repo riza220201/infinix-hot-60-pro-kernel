@@ -8,10 +8,10 @@ Default numbers are the RS4's, unvalidated on this phone; all are runtime tunabl
 KMI      : new built-in driver on core APIs only; no struct or signature change.
 
 diff --git a/drivers/cpufreq/Kconfig b/drivers/cpufreq/Kconfig
-index a18c22878..e01ee1516 100644
+index eb6082d84..87ca05bf5 100644
 --- a/drivers/cpufreq/Kconfig
 +++ b/drivers/cpufreq/Kconfig
-@@ -234,6 +234,17 @@ config CPU_FREQ_GOV_REFLEX
+@@ -237,6 +237,17 @@ config CPU_FREQ_GOV_REFLEX
  
  	  If in doubt, say M.
  

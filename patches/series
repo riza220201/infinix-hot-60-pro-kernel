@@ -15,9 +15,9 @@
 # ABI, not the feature set — a kernel with these silently dropped gates clean too.
 # 05 has no switch or symbol of its own: gate layer 2 (lib/protect_check.py) verifies it.
 05-gki-protect-no-module-exports.patch -                    -
-10-bore-6.8.0-gki-kabi.patch    CONFIG_SCHED_BORE            sched_init_bore
+10-bore-7.0.0-gki-kabi.patch    CONFIG_SCHED_BORE            sched_init_bore
 20-ntsync-mainline.patch        CONFIG_NTSYNC                ntsync_misc
-30-reflex-0.3.3r2.patch         CONFIG_CPU_FREQ_GOV_REFLEX   reflex_gov
+30-reflex-0.4.0.patch           CONFIG_CPU_FREQ_GOV_REFLEX   reflex_gov
 40-mt6789-balance.patch         CONFIG_MT6789_BALANCE        mt6789_balance_init
 50-adios-3.3.0.patch            CONFIG_MQ_IOSCHED_ADIOS      mq_adios
 60-kcompressd-0.5-gki.patch     CONFIG_KCOMPRESSD            kcompressd_nodes

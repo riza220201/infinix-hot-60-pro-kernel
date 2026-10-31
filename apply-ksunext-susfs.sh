@@ -68,7 +68,18 @@ KVERNUM=$(( 30000 + $(git -C "$WILDKSU_SRC" rev-list --count "$KVCOMMIT") ))
    — WILDKSU_REF/VERBASE moved; reconcile sources.lock (and the package banner) first."
 KSUN_TAG=$(git -C "$WILDKSU_SRC" describe --tags --abbrev=0 --match 'v[0-9]*' \
            --exclude '*-legacy' "$KVCOMMIT" 2>/dev/null || echo "v?")
-say "Wild KSU-Next $KSUN_TAG, reported version = $KVERNUM (the $KSUN_TAG manager binds it)"
+KSUN_DESC=$(git -C "$WILDKSU_SRC" describe --tags --match 'v[0-9]*' \
+            --exclude '*-legacy' "$KVCOMMIT" 2>/dev/null || echo "$KSUN_TAG")
+UAPI_HEAD=$(git -C "$WILDKSU_SRC" show "$KVCOMMIT:uapi/supercall.h" 2>/dev/null \
+            | sed -n 's/.*KERNEL_SU_UAPI_VERSION[[:space:]]*[=[:space:]][[:space:]]*\([0-9]*\).*/\1/p')
+UAPI_TAG=$(git -C "$WILDKSU_SRC" show "$KSUN_TAG:uapi/supercall.h" 2>/dev/null \
+           | sed -n 's/.*KERNEL_SU_UAPI_VERSION[[:space:]]*[=[:space:]][[:space:]]*\([0-9]*\).*/\1/p')
+if [[ -n "$UAPI_HEAD" && -n "$UAPI_TAG" && "$UAPI_HEAD" != "$UAPI_TAG" ]]; then
+  MGR_NOTE="manager = CI build of $KSUN_DESC (uapi $UAPI_HEAD > $KSUN_TAG's $UAPI_TAG)"
+else
+  MGR_NOTE="the $KSUN_TAG manager binds it"
+fi
+say "Wild KSU-Next $KSUN_TAG, reported version = $KVERNUM ($MGR_NOTE)"
 
 # static.patch de-statics three selinux_hide fns so the SusFS hooks link. Trees that
 # define SUSFS_EXPORT already do it themselves and the patch no longer applies.

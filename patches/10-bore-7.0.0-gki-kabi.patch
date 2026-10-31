@@ -1,20 +1,20 @@
-BORE 6.8.0 (Burst-Oriented Response Enhancer) for android16-6.12-2025-09 @ 1ad7be92b
-Upstream : https://github.com/firelzrd/bore-scheduler  patches/stable/0001-linux6.12.37-bore-6.8.0.patch
-           (repo HEAD d429c02 at fetch, 2026-10-01)
+BORE 7.0.0 (Burst-Oriented Response Enhancer) for android16-6.12-2025-09 @ 1ad7be92b
+Upstream : https://github.com/firelzrd/bore-scheduler  patches/stable/0001-linux6.12.37-bore-7.0.0.patch
+           (repo HEAD 1e2f57a at fetch, 2026-10-31)
 Port     : 4 hunks rejected on Android's tree and were hand-ported (futex sleep vendor
            hook, sched/Makefile, fair.c tunables, update_curr after Android's update_se()).
-GKI KMI  : upstream puts a 32-byte struct bore_ctx in task_struct, which would move
+GKI KMI  : upstream puts a 40-byte struct bore_ctx in task_struct, which would move
            every CRC reaching task_struct. Here it is split over task_struct's
-           ANDROID_KABI_RESERVE slots 3..6, one 8-byte member per slot, so that
+           ANDROID_KABI_RESERVE slots 3..7, one 8-byte member per slot, so that
            gendwarfksyms --stable versions each as its u64 placeholder. The exported
            sysctl_sched_base_slice keeps its 'unsigned int' type for the same reason.
 Runtime  : /proc/sys/kernel/sched_bore (1=on, 0=stock EEVDF behaviour, no reflash).
 
 diff --git a/include/linux/sched.h b/include/linux/sched.h
-index 456fc6afc..2b6a48301 100644
+index 456fc6afc..435a53349 100644
 --- a/include/linux/sched.h
 +++ b/include/linux/sched.h
-@@ -832,6 +832,39 @@ enum blocked_on_state {
+@@ -832,6 +832,40 @@ enum blocked_on_state {
  	BO_WAKING,
  };
  
@@ -32,15 +32,16 @@ index 456fc6afc..2b6a48301 100644
 +};
 +
 +/*
-+ * GKI KMI: upstream BORE keeps one 32-byte struct bore_ctx in task_struct, which
++ * GKI KMI: upstream BORE keeps one 40-byte struct bore_ctx in task_struct, which
 + * would move every CRC whose type reaches task_struct (runqueues, current, ...)
-+ * and get all vendor modules refused. Here the state is split across four of
++ * and get all vendor modules refused. Here the state is split across five of
 + * task_struct's ANDROID_KABI_RESERVE slots, ONE 8-byte member per slot, because
 + * gendwarfksyms --stable versions each ANDROID_KABI_USE union as its single u64
 + * placeholder — a union spanning several slots would not be recognised.
 + * struct bore_ctx keeps upstream's name for the 8-byte penalty/flags part, so
-+ * p->bore.penalty etc. read as upstream; burst_time, subtree and group live in
-+ * p->bore_burst_time, p->bore_subtree and p->bore_group.
++ * p->bore.penalty etc. read as upstream; burst_time, credit_sleep, subtree and
++ * group live in p->bore_burst_time, p->bore_credit_sleep, p->bore_subtree and
++ * p->bore_group.
 + */
 +struct bore_ctx {
 +	u16				prev_penalty;
@@ -54,30 +55,32 @@ index 456fc6afc..2b6a48301 100644
  struct task_struct {
  #ifdef CONFIG_THREAD_INFO_IN_TASK
  	/*
-@@ -1660,10 +1693,17 @@ struct task_struct {
+@@ -1660,11 +1694,19 @@ struct task_struct {
  #else
  	ANDROID_KABI_RESERVE(2);
  #endif
 +#ifdef CONFIG_SCHED_BORE
 +	ANDROID_KABI_USE(3, u64 bore_burst_time);
-+	ANDROID_KABI_USE(4, struct bore_ctx bore);
-+	ANDROID_KABI_USE(5, struct bore_bc bore_subtree);
-+	ANDROID_KABI_USE(6, struct bore_bc bore_group);
++	ANDROID_KABI_USE(4, u64 bore_credit_sleep);
++	ANDROID_KABI_USE(5, struct bore_ctx bore);
++	ANDROID_KABI_USE(6, struct bore_bc bore_subtree);
++	ANDROID_KABI_USE(7, struct bore_bc bore_group);
 +#else
  	ANDROID_KABI_RESERVE(3);
  	ANDROID_KABI_RESERVE(4);
  	ANDROID_KABI_RESERVE(5);
  	ANDROID_KABI_RESERVE(6);
-+#endif
  	ANDROID_KABI_RESERVE(7);
++#endif
  	ANDROID_KABI_RESERVE(8);
  
+ #ifdef CONFIG_RV
 diff --git a/include/linux/sched/bore.h b/include/linux/sched/bore.h
 new file mode 100644
-index 000000000..e7469c515
+index 000000000..e8fe703ea
 --- /dev/null
 +++ b/include/linux/sched/bore.h
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,58 @@
 +#ifndef _KERNEL_SCHED_BORE_H
 +#define _KERNEL_SCHED_BORE_H
 +
@@ -91,7 +94,7 @@ index 000000000..e7469c515
 +#define SCHED_BORE_AUTHOR   "Masahito Suzuki"
 +#define SCHED_BORE_PROGNAME "BORE CPU Scheduler modification"
 +
-+#define SCHED_BORE_VERSION  "6.8.0"
++#define SCHED_BORE_VERSION  "7.0.0"
 +
 +extern u8   __read_mostly sched_bore;
 +DECLARE_STATIC_KEY_TRUE(sched_bore_key);
@@ -101,6 +104,13 @@ index 000000000..e7469c515
 +extern uint __read_mostly sched_burst_penalty_scale;
 +extern uint __read_mostly sched_burst_cache_lifetime;
 +extern u8   __read_mostly sched_burst_protect_slice_lv;
++
++extern uint __read_mostly sched_credit_cap_us;
++DECLARE_STATIC_KEY_FALSE(sched_credit_key);
++
++extern void bore_note_sleep(struct task_struct *p, u64 now);
++extern u64  bore_credit_ns(struct task_struct *p);
++
 +DECLARE_STATIC_KEY_TRUE(sched_burst_protect_slice_cond_key);
 +DECLARE_STATIC_KEY_FALSE(sched_burst_protect_slice_prefer_key);
 +
@@ -121,6 +131,8 @@ index 000000000..e7469c515
 +extern int  sched_burst_inherit_type_update_handler(const struct ctl_table *table,
 +	int write, void __user *buffer, size_t *lenp, loff_t *ppos);
 +extern int  sched_burst_protect_slice_lv_update_handler(const struct ctl_table *table,
++	int write, void __user *buffer, size_t *lenp, loff_t *ppos);
++extern int  sched_credit_cap_us_update_handler(const struct ctl_table *table,
 +	int write, void __user *buffer, size_t *lenp, loff_t *ppos);
 +
 +extern void reweight_entity(
@@ -276,10 +288,10 @@ index 012d8c78a..433523936 100644
  obj-$(CONFIG_SCHED_RT_INVARIANT_TEST) += test_ksched_football.o
 diff --git a/kernel/sched/bore.c b/kernel/sched/bore.c
 new file mode 100644
-index 000000000..26d8dec50
+index 000000000..13869b7b8
 --- /dev/null
 +++ b/kernel/sched/bore.c
-@@ -0,0 +1,472 @@
+@@ -0,0 +1,528 @@
 +/*
 + *  Burst-Oriented Response Enhancer (BORE) CPU Scheduler
 + *  Copyright (C) 2021-2025 Masahito Suzuki <firelzrd@gmail.com>
@@ -298,10 +310,15 @@ index 000000000..26d8dec50
 +u8   __read_mostly sched_burst_penalty_offset   = 24;
 +uint __read_mostly sched_burst_penalty_scale    = 1536;
 +uint __read_mostly sched_burst_cache_lifetime   = 75000000;
++
++uint __read_mostly sched_credit_cap_us = 16000;
++
 +static int __maybe_unused maxval_prio    =   39;
 +static int __maybe_unused maxval_6_bits  =   63;
 +static int __maybe_unused maxval_8_bits  =  255;
 +static int __maybe_unused maxval_12_bits = 4095;
++static int __maybe_unused maxval_16_bits = 65535;
++static int __maybe_unused maxval_1_million = 1000000;
 +
 +#define MAX_BURST_PENALTY ((40U << 8) - 1)
 +#define BURST_CACHE_SAMPLE_LIMIT 63
@@ -313,6 +330,7 @@ index 000000000..26d8dec50
 +DEFINE_STATIC_KEY_TRUE(sched_burst_ancestor_key);
 +DEFINE_STATIC_KEY_TRUE (sched_burst_protect_slice_cond_key);
 +DEFINE_STATIC_KEY_FALSE(sched_burst_protect_slice_prefer_key);
++DEFINE_STATIC_KEY_FALSE(sched_credit_key);
 +
 +static inline u32 log2p1_u64_u32fp(u64 v, u8 fp) {
 +	if (unlikely(!v)) return 0;
@@ -320,6 +338,29 @@ index 000000000..26d8dec50
 +	int exponent = 64 - clz;
 +	u32 mantissa = (u32)((v << clz) << 1 >> (64 - fp));
 +	return exponent << fp | mantissa;
++}
++
++void bore_note_sleep(struct task_struct *p, u64 now)
++{
++	p->bore_credit_sleep = now;
++}
++
++u64 bore_credit_ns(struct task_struct *p)
++{
++	u64 cap = (u64)sched_credit_cap_us * 1000ULL;
++	u64 slept = 0, credit = 0;
++
++	if (p->bore_credit_sleep) {
++		slept = rq_clock(task_rq(p)) - p->bore_credit_sleep;
++		if ((s64)slept > 0) {
++			p->bore_credit_sleep = 0;
++			credit = slept < cap ? slept : cap;
++		} else {
++			slept = 0;
++		}
++	}
++
++	return credit;
 +}
 +
 +static inline u32 calc_burst_penalty(u64 burst_time) {
@@ -583,8 +624,9 @@ index 000000000..26d8dec50
 +
 +void reset_task_bore(struct task_struct *p)
 +{
-+	/* four separate KABI slots (see struct bore_ctx in sched.h), not one struct */
++	/* five separate KABI slots (see struct bore_ctx in sched.h), not one struct */
 +	p->bore_burst_time = 0;
++	p->bore_credit_sleep = 0;
 +	memset(&p->bore, 0, sizeof(p->bore));
 +	p->bore_subtree.value = 0;
 +	p->bore_group.value = 0;
@@ -615,6 +657,9 @@ index 000000000..26d8dec50
 +
 +	reset_task_bore(&init_task);
 +	update_inherit_type();
++
++	if (sched_credit_cap_us)
++		static_branch_enable(&sched_credit_key);
 +}
 +
 +static void readjust_all_task_weights(void) {
@@ -675,6 +720,20 @@ index 000000000..26d8dec50
 +		static_branch_enable(&sched_burst_protect_slice_prefer_key);
 +	else
 +		static_branch_disable(&sched_burst_protect_slice_prefer_key);
++
++	return 0;
++}
++
++int sched_credit_cap_us_update_handler(const struct ctl_table *table,
++		int write, void __user *buffer, size_t *lenp, loff_t *ppos) {
++	int ret = proc_douintvec_minmax(table, write, buffer, lenp, ppos);
++	if (ret || !write)
++		return ret;
++
++	if (sched_credit_cap_us)
++		static_branch_enable(&sched_credit_key);
++	else
++		static_branch_disable(&sched_credit_key);
 +
 +	return 0;
 +}
@@ -741,6 +800,15 @@ index 000000000..26d8dec50
 +		.proc_handler = sched_burst_protect_slice_lv_update_handler,
 +		.extra1		= SYSCTL_ZERO,
 +		.extra2		= SYSCTL_THREE,
++	},
++	{
++		.procname	= "sched_credit_cap_us",
++		.data		= &sched_credit_cap_us,
++		.maxlen		= sizeof(uint),
++		.mode		= 0644,
++		.proc_handler = sched_credit_cap_us_update_handler,
++		.extra1		= SYSCTL_ZERO,
++		.extra2		= &maxval_1_million,
 +	},
 +};
 +
@@ -914,7 +982,7 @@ index acda4cfa3..813758e18 100644
  	P(se.avg.runnable_sum);
  	P(se.avg.util_sum);
 diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
-index 448511524..b562b681f 100644
+index 448511524..4a81951f9 100644
 --- a/kernel/sched/fair.c
 +++ b/kernel/sched/fair.c
 @@ -59,6 +59,10 @@
@@ -1030,7 +1098,7 @@ index 448511524..b562b681f 100644
  #endif
  #endif
  
-@@ -1265,6 +1307,34 @@ static inline bool do_preempt_short(struct cfs_rq *cfs_rq,
+@@ -1265,6 +1307,37 @@ static inline bool do_preempt_short(struct cfs_rq *cfs_rq,
  	return false;
  }
  
@@ -1039,6 +1107,9 @@ index 448511524..b562b681f 100644
 +				     struct sched_entity *pse, struct sched_entity *se)
 +{
 +	if (!sched_feat(RUN_TO_PARITY))
++		return false;
++
++	if (!static_branch_likely(&sched_bore_key))
 +		return false;
 +
 +	if (!static_branch_likely(&sched_burst_protect_slice_cond_key))
@@ -1065,7 +1136,7 @@ index 448511524..b562b681f 100644
  /*
   * Used by other classes to account runtime.
   */
-@@ -1301,6 +1371,11 @@ static void update_curr(struct cfs_rq *cfs_rq)
+@@ -1301,6 +1374,11 @@ static void update_curr(struct cfs_rq *cfs_rq)
  	update_min_vruntime(cfs_rq);
  
  	if (entity_is_task(curr)) {
@@ -1077,7 +1148,7 @@ index 448511524..b562b681f 100644
  		/*
  		 * If the fair_server is active, we need to account for the
  		 * fair_server time whether or not the task is running on
-@@ -3947,7 +4022,7 @@ static void reweight_eevdf(struct sched_entity *se, u64 avruntime,
+@@ -3947,7 +4025,7 @@ static void reweight_eevdf(struct sched_entity *se, u64 avruntime,
  	se->deadline = avruntime + vslice;
  }
  
@@ -1086,7 +1157,7 @@ index 448511524..b562b681f 100644
  			    unsigned long weight)
  {
  	bool curr = cfs_rq->curr == se;
-@@ -5389,12 +5464,11 @@ static inline void update_misfit_status(struct task_struct *p, struct rq *rq) {}
+@@ -5389,12 +5467,11 @@ static inline void update_misfit_status(struct task_struct *p, struct rq *rq) {}
  static void
  place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
  {
@@ -1100,7 +1171,7 @@ index 448511524..b562b681f 100644
  
  	/*
  	 * Due to how V is constructed as the weighted average of entities,
-@@ -5479,7 +5553,18 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
+@@ -5479,7 +5556,18 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
  		se->rel_deadline = 0;
  		return;
  	}
@@ -1120,7 +1191,7 @@ index 448511524..b562b681f 100644
  	/*
  	 * When joining the competition; the existing tasks will be,
  	 * on average, halfway through their slice, as such start tasks
-@@ -5488,6 +5573,9 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
+@@ -5488,10 +5576,24 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
  	if (sched_feat(PLACE_DEADLINE_INITIAL) && (flags & ENQUEUE_INITIAL))
  		vslice /= 2;
  
@@ -1130,7 +1201,22 @@ index 448511524..b562b681f 100644
  	/*
  	 * EEVDF: vd_i = ve_i + r_i/w_i
  	 */
-@@ -5501,7 +5589,7 @@ static inline int cfs_rq_throttled(struct cfs_rq *cfs_rq);
+ 	se->deadline = se->vruntime + vslice;
++
++#ifdef CONFIG_SCHED_BORE
++	if (static_branch_likely(&sched_bore_key) &&
++	    static_branch_unlikely(&sched_credit_key) &&
++	    entity_is_task(se) && (flags & ENQUEUE_WAKEUP)) {
++		u64 credit = bore_credit_ns(task_of(se));
++
++		if (credit && se->deadline > credit)
++			se->deadline -= credit;
++	}
++#endif /* CONFIG_SCHED_BORE */
+ 	trace_android_rvh_place_entity(cfs_rq, se, flags, &vruntime);
+ }
+ 
+@@ -5501,7 +5603,7 @@ static inline int cfs_rq_throttled(struct cfs_rq *cfs_rq);
  static inline bool cfs_bandwidth_used(void);
  
  static void
@@ -1139,7 +1225,7 @@ index 448511524..b562b681f 100644
  
  static void
  enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
-@@ -5665,6 +5753,10 @@ dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
+@@ -5665,6 +5767,10 @@ dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
  		if (sched_feat(DELAY_DEQUEUE) && delay &&
  		    !entity_eligible(cfs_rq, se)) {
  			update_load_avg(cfs_rq, se, 0);
@@ -1150,7 +1236,7 @@ index 448511524..b562b681f 100644
  			set_delayed(se);
  			return false;
  		}
-@@ -7091,7 +7183,7 @@ static int sched_idle_cpu(int cpu)
+@@ -7091,7 +7197,7 @@ static int sched_idle_cpu(int cpu)
  #endif
  
  static void
@@ -1159,7 +1245,7 @@ index 448511524..b562b681f 100644
  {
  	struct cfs_rq *cfs_rq = cfs_rq_of(se);
  
-@@ -7104,13 +7196,22 @@ requeue_delayed_entity(struct sched_entity *se)
+@@ -7104,13 +7210,22 @@ requeue_delayed_entity(struct sched_entity *se)
  	SCHED_WARN_ON(!se->on_rq);
  
  	if (sched_feat(DELAY_ZERO)) {
@@ -1183,7 +1269,7 @@ index 448511524..b562b681f 100644
  			if (se != cfs_rq->curr)
  				__enqueue_entity(cfs_rq, se);
  			cfs_rq->nr_running++;
-@@ -7148,7 +7249,7 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
+@@ -7148,7 +7263,7 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
  		util_est_enqueue(&rq->cfs, p);
  
  	if (flags & ENQUEUE_DELAYED) {
@@ -1192,7 +1278,7 @@ index 448511524..b562b681f 100644
  		return;
  	}
  
-@@ -7168,7 +7269,7 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
+@@ -7168,7 +7283,7 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
  	for_each_sched_entity(se) {
  		if (se->on_rq) {
  			if (se->sched_delayed)
@@ -1201,7 +1287,7 @@ index 448511524..b562b681f 100644
  			break;
  		}
  		cfs_rq = cfs_rq_of(se);
-@@ -7392,6 +7493,15 @@ static bool dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
+@@ -7392,6 +7507,16 @@ static bool dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
  		util_est_dequeue(&rq->cfs, p);
  
  	util_est_update(&rq->cfs, p, flags & DEQUEUE_SLEEP);
@@ -1211,13 +1297,14 @@ index 448511524..b562b681f 100644
 +	if ((flags & DEQUEUE_SLEEP) && entity_is_task(se)) {
 +		if (cfs_rq->curr == se)
 +			update_curr(cfs_rq);
++		bore_note_sleep(p, rq_clock(rq));
 +		restart_burst_bore(p);
 +	}
 +#endif /* CONFIG_SCHED_BORE */
  	if (dequeue_entities(rq, &p->se, flags) < 0)
  		return false;
  
-@@ -9075,6 +9185,11 @@ static void check_preempt_wakeup_fair(struct rq *rq, struct task_struct *p, int
+@@ -9075,6 +9200,11 @@ static void check_preempt_wakeup_fair(struct rq *rq, struct task_struct *p, int
  	if (do_preempt_short(cfs_rq, pse, se))
  		cancel_protect_slice(se);
  
@@ -1229,7 +1316,7 @@ index 448511524..b562b681f 100644
  	/*
  	 * If @p has become the most eligible task, force preemption.
  	 */
-@@ -9260,16 +9375,25 @@ static void yield_task_fair(struct rq *rq)
+@@ -9260,16 +9390,25 @@ static void yield_task_fair(struct rq *rq)
  	/*
  	 * Are we the only task in the tree?
  	 */
@@ -1255,7 +1342,7 @@ index 448511524..b562b681f 100644
  	/*
  	 * Tell update_rq_clock() that we've just updated,
  	 * so we don't do microscopic update in schedule()
-@@ -13552,6 +13676,9 @@ static void switched_to_fair(struct rq *rq, struct task_struct *p)
+@@ -13552,6 +13691,9 @@ static void switched_to_fair(struct rq *rq, struct task_struct *p)
  	SCHED_WARN_ON(p->se.sched_delayed);
  
  	attach_task_cfs_rq(p);
