@@ -15,9 +15,11 @@ Screenshot*
 anykernel/.git/
 
 # Markdown is local work notes (journal, resume, inventory, release drafts) —
-# only READMEs are part of the repo.
+# only the root README.md is part of the repo; release builder scripts stay local too.
 *.md
-!README.md
+!/README.md
+release-*.sh
+recreate-releases.sh
 
 # device logs from testers (personal data — never in the public repo)
 *dmesg*.txt

@@ -37,23 +37,29 @@ RUSTC_VERSION="1.82.0.p2"
 # patch. That patch is for stock KernelSU; measured against this tree it fails 20 hunks
 # on KSU-Next v3.4.0 and 36 on v3.3.0 — the pairing, not the patch, was the problem.
 #
-# d21e0a66 = upstream KernelSU-Next dev b427a3f9 (v3.4.2 + 50 commits) + 13 Wild
-# commits (9 Wild + 4 Samsung KDP/RKP/DEFEX compat, inert on mediatek,MT6789).
-WILDKSU_REF="d21e0a66c887ae4bc75b7c9f83e41761819ec09a"      # pershoot/KernelSU-Next dev-susfs (hot60pro-pin-20261031)
-WILDKSU_VERBASE="b427a3f9c2421a443f961007bfce66b25486643f"  # version anchor = merge-base with upstream dev (v3.4.2 + 50)
-WILDKSU_VER_EXPECT="33405"                                   # 30000 + rev-count(VERBASE); apply script DIES on drift
-# 🔑 UAPI 6: upstream 16be0f72 (module preinit) bumped KERNEL_SU_UAPI_VERSION 5 -> 6;
-#    the released v3.4.2 APK (33355, uapi 5) is older than this anchor and its ksud
-#    refuses uapi 6. Install the KernelSU-Next CI manager build of b427a3f9 (33405, uapi 6).
-SUSFS_REF="2f0be22c2d09b8cca0a28ec0c45d8609b6433a21"        # simonpunk gki-android16-6.12 6b60a30 + 2 pershoot picks, rebased onto 1ad7be92b (hot60pro-susfs-20261031)
+# 86cf3441 = upstream KernelSU-Next dev cefb048b (v3.4.2 + 97, 10-31) + 14 Wild commits
+# (incl. "susfs (v2.3.0): Introduce SuSFS" 10-31, "selinux_hide: Even out attr/current
+# timing" 10-29, and the 4 Samsung KDP/RKP/DEFEX compat commits, inert on mediatek,MT6789).
+# pershoot REBASED dev-susfs again: v3's d21e0a66 is on no branch; kept as local branch
+# hot60pro-pin-20261031, this pin as hot60pro-pin-20261101 (a pin into a rebasing fork rots).
+WILDKSU_REF="86cf3441815fe71dbc35ff6c675c3eea3f946467"      # pershoot/KernelSU-Next dev-susfs (hot60pro-pin-20261101)
+WILDKSU_VERBASE="cefb048b069b7439fb4020d043de2d338dbc00fa"                                    # version anchor = merge-base with upstream dev (v3.4.2-97-gcefb048b)
+WILDKSU_VER_EXPECT="33452"                                   # 30000 + rev-count(VERBASE); apply script DIES on drift
+# 🔑 UAPI 6 (unchanged since v3): no KernelSU-Next release carries it (newest is still v3.4.2,
+#    uapi 5). Pair with the KernelSU-Next CI manager of cefb048b: Actions run 41209311538
+#    ("Build Manager CI", success, artifacts `manager` / `manager-spoofed`, expire 2027-01-29).
+# SusFS kernel side bumped to f0939fc (2026-11-01): pershoot's 86cf3441 ("kernel: selinux_hide:
+#    Even out attr/current timing") calls susfs_add_sus_type / susfs_add_sus_avd_allowed_by_type
+#    introduced in simonpunk's 15890c6 + a8af3db + f0939fc.
+SUSFS_REF="f95c7639616f37166cce09ae59ef5cdb091e325f"        # simonpunk gki-android16-6.12 f0939fc + 2 pershoot picks, rebased onto 1ad7be92b (hot60pro-susfs-20261101)
 
 # ── Source modifications — VENDORED in patches/ ───────────────────────────────
 # The ported patches themselves are the pin: each is generated against
 # KERNEL_COMMON_REF and applied with strict `git apply` (patches/series). These
 # refs record where each port came FROM, so a re-port starts from the same place.
-BORE_UPSTREAM="firelzrd/bore-scheduler@1e2f57a patches/stable/0001-linux6.12.37-bore-7.0.0.patch"
-NTSYNC_UPSTREAM="torvalds/linux v6.14 drivers/misc/ntsync.c + fixes 61611481f7b5, 180a232ea780"
-REFLEX_UPSTREAM="firelzrd/reflex@f0a6678 patches/0001-linux6.12.74-reflex-v0.4.0.patch (latency_weight=300)"
+BORE_UPSTREAM="firelzrd/bore-scheduler@1e2f57a patches/stable/0001-linux6.12.37-bore-7.0.0.patch"  # re-checked 2026-11-01: still upstream HEAD
+NTSYNC_UPSTREAM="torvalds/linux v6.14 drivers/misc/ntsync.c + fixes 61611481f7b5, 180a232ea780"  # re-checked 2026-11-01: only 64cbb36448ff since (FD_PREPARE API, absent in 6.12)
+REFLEX_UPSTREAM="firelzrd/reflex@f0a6678 patches/0001-linux6.12.74-reflex-v0.4.0.patch (latency_weight=300)"  # re-checked 2026-11-01: still upstream HEAD
 BALANCE_UPSTREAM="itel-rs4-kernel patches/rs4/rs4_balance.c (v7)"
 ADIOS_UPSTREAM="firelzrd/adios@6fa79e3 patches/stable/0001-linux6.12.44-ADIOS-3.3.0.patch"
 KCOMPRESSD_UPSTREAM="firelzrd/kcompressd-unofficial@3a42168 patches/stable/0001-linux6.12.44-kcompressd-unofficial-0.5.patch"

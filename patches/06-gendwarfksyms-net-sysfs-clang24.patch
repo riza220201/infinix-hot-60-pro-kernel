@@ -1,0 +1,58 @@
+From: riza <riza@RivalAbadiKernel>
+Subject: [PATCH] ANDROID: net-sysfs: pin bus_type/mdio_device type strings for gendwarfksyms (Neutron Clang 24)
+
+gendwarfksyms shares one DIE cache across every export of an object, so the
+type string it hashes can depend on the order in which exports are walked.
+Under Neutron Clang 24 the DWARF puts of_find_net_device_by_node before
+net_ns_type_operations, and the cached formal_parameter list of
+int (*)(struct device *, const struct device_driver *) (bus_type.match,
+mdio_device.bus_match) is emitted without its " ," separator.
+
+Nothing in the ABI changed: each export hashed ALONE gives the stock CRC under
+clang 19 and clang 24 alike. But all four exports of net-sysfs.o moved, and
+vendor_dlkm/cfg80211.ko (net_ns_type_operations 0xe22fd8a9, ours 0xf52a27c0)
+was refused at load -> wlan_drv_gen4m never registered -> no Wi-Fi on v3.
+
+Pin the two type strings to the stock (clang 19) expansion. Measured on
+net/core/net-sysfs.o, both compilers, KBUILD_GENDWARFKSYMS_STABLE=1:
+  net_ns_type_operations      0xe22fd8a9   (clang 24 without this: 0xf52a27c0)
+  of_find_net_device_by_node  0xe4ab0626   (0xd2e2b631)
+  netdev_class_create_file_ns 0x3eed28c5   (0x4eebc487)
+  netdev_class_remove_file_ns 0x7db415a5   (0x0f1c0c97)
+Clang 19 output is unchanged by this patch.
+
+---
+diff --git a/net/core/net-sysfs.c b/net/core/net-sysfs.c
+index 7724aacac..963d25a5e 100644
+--- a/net/core/net-sysfs.c
++++ b/net/core/net-sysfs.c
+@@ -25,6 +25,7 @@
+ #include <linux/cpu.h>
+ #include <net/netdev_rx_queue.h>
+ #include <net/rps.h>
++#include <linux/android_kabi.h>
+ 
+ #include "dev.h"
+ #include "net-sysfs.h"
+@@ -1993,6 +1994,21 @@ const struct kobj_ns_type_operations net_ns_type_operations = {
+ };
+ EXPORT_SYMBOL_GPL(net_ns_type_operations);
+ 
++/*
++ * gendwarfksyms is order-dependent: with Neutron Clang 24's DWARF layout,
++ * of_find_net_device_by_node is walked before net_ns_type_operations and the
++ * shared DIE cache keeps the formal_parameter list of
++ * int (*)(struct device *, const struct device_driver *) without its " ,"
++ * separator. The ABI is identical (each symbol alone hashes the same under
++ * clang 19 and 24), but every export of this object gets a new CRC and
++ * cfg80211.ko (net_ns_type_operations 0xe22fd8a9) is refused -> no Wi-Fi.
++ * Pin the two affected type strings to the stock (clang 19) expansion.
++ */
++ANDROID_KABI_TYPE_STRING("s#bus_type",
++	"structure_type bus_type { member pointer_type { const_type { base_type char byte_size(1) encoding(8) } } name data_member_location(0) , member pointer_type { const_type { base_type char byte_size(1) encoding(8) } } dev_name data_member_location(8) , member pointer_type { pointer_type { const_type { s#attribute_group } } } bus_groups data_member_location(16) , member pointer_type { pointer_type { const_type { s#attribute_group } } } dev_groups data_member_location(24) , member pointer_type { pointer_type { const_type { s#attribute_group } } } drv_groups data_member_location(32) , member pointer_type { subroutine_type ( formal_parameter pointer_type { s#device } , formal_parameter pointer_type { const_type { s#device_driver } } ) -> base_type int byte_size(4) encoding(5) } match data_member_location(40) , member pointer_type { subroutine_type ( formal_parameter pointer_type { const_type { s#device } } , formal_parameter pointer_type { s#kobj_uevent_env } ) -> base_type int byte_size(4) encoding(5) } uevent data_member_location(48) , member pointer_type { subroutine_type ( formal_parameter pointer_type { s#device } ) -> base_type int byte_size(4) encoding(5) } probe data_member_location(56) , member pointer_type { subroutine_type ( formal_parameter pointer_type { s#device } ) -> base_type void } sync_state data_member_location(64) , member pointer_type { subroutine_type ( formal_parameter pointer_type { s#device } ) -> base_type void } remove data_member_location(72) , member pointer_type { subroutine_type ( formal_parameter pointer_type { s#device } ) -> base_type void } shutdown data_member_location(80) , member pointer_type { subroutine_type ( formal_parameter pointer_type { s#device } ) -> base_type int byte_size(4) encoding(5) } online data_member_location(88) , member pointer_type { subroutine_type ( formal_parameter pointer_type { s#device } ) -> base_type int byte_size(4) encoding(5) } offline data_member_location(96) , member pointer_type { subroutine_type ( formal_parameter pointer_type { s#device } , formal_parameter t#pm_message_t ) -> base_type int byte_size(4) encoding(5) } suspend data_member_location(104) , member pointer_type { subroutine_type ( formal_parameter pointer_type { s#device } ) -> base_type int byte_size(4) encoding(5) } resume data_member_location(112) , member pointer_type { subroutine_type ( formal_parameter pointer_type { s#device } ) -> base_type int byte_size(4) encoding(5) } num_vf data_member_location(120) , member pointer_type { subroutine_type ( formal_parameter pointer_type { s#device } ) -> base_type int byte_size(4) encoding(5) } dma_configure data_member_location(128) , member pointer_type { subroutine_type ( formal_parameter pointer_type { s#device } ) -> base_type void } dma_cleanup data_member_location(136) , member pointer_type { const_type { s#dev_pm_ops } } pm data_member_location(144) , member t#bool need_parent_lock data_member_location(152) , member t#u64 data_member_location(160) , member t#u64 data_member_location(168) , member t#u64 data_member_location(176) , member t#u64 data_member_location(184) } byte_size(192)");
++ANDROID_KABI_TYPE_STRING("s#mdio_device",
++	"structure_type mdio_device { member s#device dev data_member_location(0) , member pointer_type { s#mii_bus } bus data_member_location(912) , member array_type[32] { base_type char byte_size(1) encoding(8) } modalias data_member_location(920) , member pointer_type { subroutine_type ( formal_parameter pointer_type { s#device } , formal_parameter pointer_type { const_type { s#device_driver } } ) -> base_type int byte_size(4) encoding(5) } bus_match data_member_location(952) , member pointer_type { subroutine_type ( formal_parameter pointer_type { s#mdio_device } ) -> base_type void } device_free data_member_location(960) , member pointer_type { subroutine_type ( formal_parameter pointer_type { s#mdio_device } ) -> base_type void } device_remove data_member_location(968) , member base_type int byte_size(4) encoding(5) addr data_member_location(976) , member base_type int byte_size(4) encoding(5) flags data_member_location(980) , member base_type int byte_size(4) encoding(5) reset_state data_member_location(984) , member pointer_type { s#gpio_desc } reset_gpio data_member_location(992) , member pointer_type { s#reset_control } reset_ctrl data_member_location(1000) , member base_type unsigned int byte_size(4) encoding(7) reset_assert_delay data_member_location(1008) , member base_type unsigned int byte_size(4) encoding(7) reset_deassert_delay data_member_location(1012) } byte_size(1016)");
++
+ static int netdev_uevent(const struct device *d, struct kobj_uevent_env *env)
+ {
+ 	const struct net_device *dev = to_net_dev(d);

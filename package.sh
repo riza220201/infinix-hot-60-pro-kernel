@@ -238,6 +238,11 @@ AK_TEST="$(mktemp -d)"
 trap 'rm -rf "$AK_TEST"' EXIT
 cp -r "$AK" "$AK_TEST/ak"
 cp "$STOCK_BOOT_IMG" "$AK_TEST/boot_a"
+# In the throwaway test copy ($AK_TEST), replace the ARM32 recovery binaries
+# with host x86_64 busybox and magiskboot so we don't trigger qemu-arm binfmt
+# (which can futex-deadlock when fork()ing with inherited fds).
+ln -sf "$(command -v busybox)" "$AK_TEST/ak/tools/busybox"
+ln -sf "$(command -v magiskboot)" "$AK_TEST/ak/tools/magiskboot"
 # Rewrite BLOCK to the relative path under /dev (..$AK_TEST/boot_a), bound dd
 # to 64 MiB (since boot_a is a regular file here, not a block device), and stub
 # /proc/version to 6.12.38 so the 6.12 sanity guard passes on the build host.
@@ -247,13 +252,13 @@ sed -i \
   "$AK_TEST/ak/anykernel.sh"
 (
   cd "$AK_TEST/ak"
-  PATH="$AK_TEST/ak/tools:$PATH" "$AK_TEST/ak/tools/busybox" ash anykernel.sh 1 >/dev/null 2>&1
+  PATH="$AK_TEST/ak/tools:$PATH" busybox ash anykernel.sh 1 >/dev/null 2>&1
 ) || die "AnyKernel3 installer self-test failed on stock boot.img"
 (
   mkdir -p "$AK_TEST/verify"
   cd "$AK_TEST/verify"
   cp "$AK_TEST/boot_a" flashed.img
-  "$AK/tools/magiskboot" unpack flashed.img >/dev/null 2>&1 || die "AnyKernel3 verify unpack failed"
+  magiskboot unpack flashed.img >/dev/null 2>&1 || die "AnyKernel3 verify unpack failed"
   cmp -s kernel "$RAWIMG" || die "AnyKernel3 flashed boot.img kernel does NOT match our Image"
 )
 rm -rf "$AK_TEST"

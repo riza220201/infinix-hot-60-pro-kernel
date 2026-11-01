@@ -2,19 +2,21 @@
 
 A GKI build-and-gate pipeline for the Infinix HOT 60 Pro+ (MT6789, `android16-6.12`).
 
-> **Status:** v1 (2026-09-30) and v2 (2026-10-01) booted and confirmed working root on
-> hardware. **v3 (2026-10-31)** — built with **Neutron Clang 24** (`06092026`, LLVM
-> `f42c87ba`), updated to **BORE 7.0.0**, **Reflex 0.4.0**, **ntsync** (+ mainline fixes),
-> **KernelSU-Next 33405** (`v3.4.2-50-gb427a3f9`, **uapi 6**) + **SusFS v2.3.0**, and a
-> **fixed, package-time self-tested AnyKernel3 installer** — is built, gated clean across all
-> 505 device modules (`424 vendor + 81 system_dlkm`), and packaged.
+> **Status:** v1 (2026-09-30), v2 (2026-10-01), and v3 (2026-10-31) booted on hardware
+> (including other MT6789 6.12 devices via the AnyKernel3 zip). **v4 (`20261101`)** — built
+> with **Neutron Clang 24** (`06092026`, LLVM `f42c87ba`), fixing the **Neutron Clang 24
+> `gendwarfksyms` DIE-cache bug** (`net_ns_type_operations` `0xe22fd8a9` so `cfg80211.ko` /
+> Wi-Fi loads with **zero vendor waivers**), and updating **KernelSU-Next to 33452**
+> (`v3.4.2-97-gcefb048b`, **uapi 6**) + **SusFS v2.3.0** (`f95c763`), alongside **BORE 7.0.0**,
+> **Reflex 0.4.0**, **ntsync**, and the **self-tested AnyKernel3 installer** — is built,
+> gated clean across all 505 device modules (`424 vendor + 81 system_dlkm`), and packaged.
 
 ## Variants & Features
 
 | Variant | What | `uname -r` |
 |---|---|---|
 | **vanilla** | BORE 7.0.0 + Reflex 0.4.0 + ntsync + ADIOS 3.3.0 + Kcompressd 0.5 + le9uo 1.14 + `mt6789_balance` + BBR/fq/CAKE, no root | `6.12.38-RivalAbadi-vanilla` |
-| **ksunext** | vanilla + KernelSU-Next **33405** (`v3.4.2-50-gb427a3f9`, **uapi 6**) + SusFS **v2.3.0** | `6.12.38-RivalAbadi-ksunext` |
+| **ksunext** | vanilla + KernelSU-Next **33452** (`v3.4.2-97-gcefb048b`, **uapi 6**) + SusFS **v2.3.0** (`f95c763`) | `6.12.38-RivalAbadi-ksunext` |
 
 * **Scheduler:** **BORE 7.0.0** (Burst-Oriented Response Enhancer, `firelzrd`), KMI-packed
   into `task_struct` `ANDROID_KABI_RESERVE(3..7)` (one 8-byte member per union for
@@ -34,10 +36,10 @@ A GKI build-and-gate pipeline for the Infinix HOT 60 Pro+ (MT6789, `android16-6.
   **CAKE** + Westwood / Vegas / H-TCP + TTL/HL netfilter targets.
 * **Compiler:** **Neutron Clang 24** (`clang version 24.0.0git`, LLVM `f42c87ba`), with
   fallback support for AOSP `clang-r536225` (Clang 19.0.1).
-* **ksunext Manager Note (uapi 6):** KernelSU-Next `33405` speaks **KSU uapi 6**
+* **ksunext Manager Note (uapi 6):** KernelSU-Next `33452` speaks **KSU uapi 6**
   (per-feature dynamic hook split). Because the `v3.4.2` release APK uses uapi 5, install
-  the official CI manager build of `v3.4.2-50-gb427a3f9` (versionCode `33405`):
-  [manager.zip](https://nightly.link/KernelSU-Next/KernelSU-Next/actions/runs/39297115788/manager.zip).
+  the official CI manager build of `v3.4.2-97-gcefb048b` (versionCode `33452`):
+  [manager.zip](https://nightly.link/KernelSU-Next/KernelSU-Next/actions/runs/41209311538/manager.zip).
 
 ## The point of this repo
 
@@ -85,7 +87,7 @@ the refutation together.
 ./tools/fetch-toolchain.sh        # 5.3 GB: clang-r536225 + rust 1.82.0
 ./build.sh vanilla --stock        # pure ACK — measures the KMI alone
 ./build.sh vanilla                # + patches/series + config/vanilla_defconfig + brand
-./build.sh ksunext                # vanilla + KernelSU-Next 33405 (uapi 6) + SusFS v2.3.0
+./build.sh ksunext                # vanilla + KernelSU-Next 33452 (uapi 6) + SusFS v2.3.0
 ./build.sh vanilla --gate-only    # re-gate without rebuilding
 ./package.sh vanilla              # AnyKernel3 zip + repacked boot.img (reads .build/staged-vanilla/)
 ./package.sh ksunext              # AnyKernel3 zip + repacked boot.img (reads .build/staged-ksunext/)
@@ -145,4 +147,4 @@ Neutron-Toolchains'. AnyKernel3 is osm0sis'.
 **Contributors:**
 * **Riza** (`riza220201`) — maintainer & project lead
 * **Claude Opus** (Anthropic) — co-author (initial GKI 6.12 pipeline, 3-layer KMI gate, v1/v2 ports)
-* **Gemini Argon** (Google DeepMind) — co-author (Neutron Clang 24 Kleaf integration, BORE 7.0.0 / Reflex 0.4.0 / KSU-Next 33405 uapi 6 updates, AnyKernel3 v4 GKI fix & self-test)
+* **Gemini Argon** (Google DeepMind) — co-author (Neutron Clang 24 Kleaf integration & `gendwarfksyms` DIE-cache Wi-Fi fix, BORE 7.0.0 / Reflex 0.4.0 / KSU-Next 33452 uapi 6 updates, AnyKernel3 v4 GKI fix & self-test)
