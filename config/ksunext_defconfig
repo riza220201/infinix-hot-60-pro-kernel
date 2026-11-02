@@ -21,6 +21,10 @@ CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
 CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
 CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
 CONFIG_KSU_SUSFS_ENABLE_LOG=y
+# v5: SusFS 2557ea2 + pershoot 8f0c42e8 split the get/setpriority + ioprio uid
+# filter (on under KSU_SUSFS in v4) into its own switch. Pinned on explicitly so
+# v5 keeps v4's behaviour, and so the fragment check proves it built in.
+CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER=y
 
 # The vanilla tweaks ride along — a root build should not be a worse kernel.
 # build.sh composes vanilla_defconfig + this file + the generated brand block, so

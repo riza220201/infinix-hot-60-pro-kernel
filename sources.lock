@@ -42,16 +42,23 @@ RUSTC_VERSION="1.82.0.p2"
 # timing" 10-29, and the 4 Samsung KDP/RKP/DEFEX compat commits, inert on mediatek,MT6789).
 # pershoot REBASED dev-susfs again: v3's d21e0a66 is on no branch; kept as local branch
 # hot60pro-pin-20261031, this pin as hot60pro-pin-20261101 (a pin into a rebasing fork rots).
-WILDKSU_REF="86cf3441815fe71dbc35ff6c675c3eea3f946467"      # pershoot/KernelSU-Next dev-susfs (hot60pro-pin-20261101)
-WILDKSU_VERBASE="cefb048b069b7439fb4020d043de2d338dbc00fa"                                    # version anchor = merge-base with upstream dev (v3.4.2-97-gcefb048b)
-WILDKSU_VER_EXPECT="33452"                                   # 30000 + rev-count(VERBASE); apply script DIES on drift
+# v5 (2026-11-02): pershoot rebased dev-susfs onto upstream dev a6c81fa4 (cefb048b + 3:
+# 48501dad SELinux generation tracking, b3b774e6/a6c81fa4 susfs (LKM) fixes). range-diff
+# vs 86cf3441: 12/14 Wild commits identical; 8f0c42e8 (SuSFS) adopts SusFS 2557ea2
+# (KSU_SUSFS_PRIORITY_UID_FILTER) + confines #3964 gen tracking to non-susfs; a809f3c2
+# (throne_tracker) rebased context only. Requires SusFS >= 2557ea2 -> SUSFS_REF bumped too.
+WILDKSU_REF="bea056e5637d15ddd6b0dc2013e8f2a7d98a9270"      # pershoot/KernelSU-Next dev-susfs (hot60pro-pin-20261102)
+WILDKSU_VERBASE="a6c81fa4a8b7341d0bc5c3e4507531459df871ae"                                    # version anchor = merge-base with upstream dev (v3.4.2-100-ga6c81fa4)
+WILDKSU_VER_EXPECT="33455"                                   # 30000 + rev-count(VERBASE); apply script DIES on drift
 # 🔑 UAPI 6 (unchanged since v3): no KernelSU-Next release carries it (newest is still v3.4.2,
-#    uapi 5). Pair with the KernelSU-Next CI manager of cefb048b: Actions run 41209311538
-#    ("Build Manager CI", success, artifacts `manager` / `manager-spoofed`, expire 2027-01-29).
+#    uapi 5). v5: pair with the KernelSU-Next CI manager of a6c81fa4: Actions run 41396285368
+#    ("Build Manager CI", success, artifacts `manager` / `manager-spoofed`, expire 2027-01-31).
+#    cefb048b..a6c81fa4 touches nothing under manager/ userspace/ uapi/, so v4's manager
+#    (run 41209311538) binds this kernel too.
 # SusFS kernel side bumped to f0939fc (2026-11-01): pershoot's 86cf3441 ("kernel: selinux_hide:
 #    Even out attr/current timing") calls susfs_add_sus_type / susfs_add_sus_avd_allowed_by_type
 #    introduced in simonpunk's 15890c6 + a8af3db + f0939fc.
-SUSFS_REF="f95c7639616f37166cce09ae59ef5cdb091e325f"        # simonpunk gki-android16-6.12 f0939fc + 2 pershoot picks, rebased onto 1ad7be92b (hot60pro-susfs-20261101)
+SUSFS_REF="4f97ca95b574d9bca47d35f8883eafe2f145d3dc"        # simonpunk gki-android16-6.12 68f62fa + 2 pershoot picks, rebased onto 1ad7be92b (hot60pro-susfs-20261102)
 
 # ── Source modifications — VENDORED in patches/ ───────────────────────────────
 # The ported patches themselves are the pin: each is generated against

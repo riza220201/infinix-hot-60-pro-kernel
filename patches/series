@@ -24,3 +24,6 @@
 50-adios-3.3.0.patch            CONFIG_MQ_IOSCHED_ADIOS      mq_adios
 60-kcompressd-0.5-gki.patch     CONFIG_KCOMPRESSD            kcompressd_nodes
 70-le9uo-1.14.patch             -                            sysctl_workingset_protection
+# 80 is KMI-sensitive (touches tcp_sock / tcp_congestion_ops): BUILD_BUG_ONs in
+# tcp_bbr.c pin the struct sizes + tls.ko offsets; gate layer 1 verifies the CRCs.
+80-bbr3-gki-kabi.patch          CONFIG_TCP_CONG_BBR          bbr_skb_marked_lost
